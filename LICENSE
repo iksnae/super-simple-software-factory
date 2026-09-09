@@ -1,6 +1,20 @@
 MIT License
 
+This project is a derivative work. It contains substantial portions of the
+Super Simple Software Factory by IndyDevDan (disler), used under the MIT
+License, and both copyright notices are retained below as that license requires.
+
 Copyright (c) 2026 IndyDevDan
+    Original work: https://github.com/disler/super-simple-software-factory
+    Retained here: the ADW engine modules (envelopes, gates, permissions,
+    tracer, session, the pi coding-agent interface), the agent prompts, and the
+    model rosters.
+
+Copyright (c) 2026 K Mills
+    This work: extraction into a shared checkout serving many repositories
+    (factory/paths.py, factory/cli.py), the declarative workflow interpreter
+    (factory/engine.py), the configuration-driven quality layer, the layered
+    config schema, the just command surface, and the documentation.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

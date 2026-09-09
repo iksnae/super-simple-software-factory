@@ -147,14 +147,15 @@ temp/
 .netlify/
 *.tsbuildinfo
 
-# sssf runtime
+# sssf runtime — the shared factory keeps NOTHING here; run artifacts live in
+# the TARGET repo's .sssf/data/. Both paths are listed: adws/ for a stamped
+# repo, .sssf/ as the backstop for pointing --repo at this checkout.
 adws/adw_data/sessions/
+.sssf/
 # Unanchored: a trace db is never committed, wherever it turns up. Two empty
 # ones had been tracked — adws/sssf.db and templates/adws/sssf.db, the second
 # of which would have stamped a fake trace db into every target repo.
 sssf.db*
 
-# demo app runtime (example branch)
-apps/inkwell/inkwell.db*
 
 *.mov
