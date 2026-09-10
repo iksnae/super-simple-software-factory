@@ -6,21 +6,23 @@ The event schema, the seven SQLite tables, and the polling contract — the one 
 
 **Files are the raw record** (`raw_output.jsonl` streams, `envelope.json`, `agent_map.json`); **SQLite (`sssf.db`) is the queryable mirror** the UI reads. `tracer.py` writes both. Losing the db loses nothing that can't be rebuilt from files.
 
-Location comes from `observability.db` in `sssf.config.yaml`, default `adws/adw_data/sssf.db` — inside the **target** repo, gitignored.
+Location comes from `observability.db` in `sssf.config.yaml`, default `.sssf/data/sssf.db` — inside the **target** repo, gitignored. One factory, many repos, one trace each.
 
 ## Event schema
 
-`tracer.py` emits these types, every one logged against its `adw_id` **and** `phase_id`:
+`tracer.py` emits these twelve types, every one logged against its `adw_id` **and** `phase_id`:
 
 | Type | Emitted when |
 |---|---|
 | `phase_start` | a `run.phase(...)` block is entered |
 | `agent_start` | a coding agent is spawned or resumed for `ph.call(...)` |
 | `tool_call` | a tool (`read`, `bash`, `edit`, `write`) returns — **one event per real call**, named `bash: ls -la src`, payload `{tool, tool_call_id, args, result_snippet, ok, duration_ms, agent}` |
+| `thinking` | an assistant turn carried reasoning content — payload `{text, stop_reason}`, the joined thinking blocks |
+| `agent_message` | an assistant turn carried prose — payload `{text, stop_reason}`; `stop_reason` tells working narration (`toolUse`) from the final answer (`stop`) |
 | `handoff` | an envelope crosses from one agent to the next |
 | `gate_pass` | a gate found no failed checks — payload carries `attempt`, `checks` (the evidence), and an empty `violations` |
 | `gate_fail` | a gate found at least one failed check — payload carries `attempt`, `checks`, and `violations` |
-| `log` | an explicit `ph.log(...)` from the ADW script |
+| `log` | an explicit `ph.log(...)` from the engine, plus every console line |
 | `agent_end` | the agent's run completes; envelope parsed or not — payload carries `cost`, `usage` (the per-component breakdown), `context_tokens`, `context_window` |
 | `phase_end` | the block exits; carries the resolved status |
 | `error` | a raise inside a phase block |
@@ -50,11 +52,13 @@ The gate event payload carries `attempt` too, so the `gate_results` table and th
 ```sql
 sessions (
   adw_id        TEXT PRIMARY KEY,
+  adw_name      TEXT,              -- the workflow that ran
   request       TEXT,              -- the engineer's ask
   status        TEXT,              -- running | success | fail
   engineer      TEXT,
   started_at    TEXT, ended_at TEXT,
-  total_tokens  INTEGER, total_cost REAL
+  total_tokens  INTEGER, total_cost REAL,
+  archived      INTEGER DEFAULT 0  -- review triage, set by the UI; never by a run
 );
 
 phases (
@@ -74,7 +78,8 @@ events (
   phase_id      TEXT REFERENCES phases,   -- every event logs against adw + phase
   parent_id     TEXT,                     -- span nesting
   type          TEXT,   -- phase_start | phase_end | agent_start | agent_end | tool_call
-                        -- | handoff | gate_pass | gate_fail | log | error
+                        -- | thinking | agent_message | handoff
+                        -- | gate_pass | gate_fail | log | error
   name          TEXT,
   payload_json  TEXT,
   tokens        INTEGER,
@@ -127,7 +132,7 @@ agent_sessions (                   -- the queryable mirror of agent_map.json
 );
 ```
 
-**A hung agent emits nothing**, which is exactly when you need its pid: no events, no tokens, no output to read. `processes` is the only table that can answer "what is this run running, and how do I stop it" — `just procs <adw_id>` lists what is live, `just kill <adw_id>` stops children before the parent, and both verify the recorded `command` still matches the pid before signalling it. A killed run finalizes its own trace: SIGTERM and SIGINT are turned into `SystemExit` in `session.ensure`, so the session lands on `fail` with its process rows closed instead of reading `running` forever.
+**A hung agent emits nothing**, which is exactly when you need its pid: no events, no tokens, no output to read. `processes` is the only table that can answer "what is this run running, and how do I stop it" — `just obs procs <repo>` lists what is live and verifies the recorded `command` still matches the pid before reporting it, because pids get recycled. A killed run finalizes its own trace: SIGTERM and SIGINT are turned into `SystemExit` in `session.ensure`, so the session lands on `fail` with its process rows closed instead of reading `running` forever.
 
 **Derived, never stored:** phase durations (`ended_at − started_at`), session phase-progress (query `phases` by `adw_id`), lane layout (`kind` + `owner`).
 
@@ -143,7 +148,7 @@ PRAGMA synchronous=NORMAL;
 PRAGMA busy_timeout=5000;
 ```
 
-WAL allows readers during writes. Writers are the tracers of running ADW processes; concurrent writers are fine given one small transaction per event plus `busy_timeout`. The visualizer reads on a readonly connection with exactly one exception: archiving a session (`POST /api/sessions/:adw_id/archive`) opens a second connection to set `sessions.archived`. That flag is review triage — it says a human has looked at the run — so it is the reader's state living on the row, and no tracer ever writes or reads it.
+WAL allows readers during writes. Writers are the tracers of running workflow processes; concurrent writers are fine given one small transaction per event plus `busy_timeout`. The visualizer reads on a readonly connection with exactly one exception: archiving a session (`POST /api/sessions/:adw_id/archive`) opens a second connection to set `sessions.archived`. That flag is review triage — it says a human has looked at the run — so it is the reader's state living on the row, and no tracer ever writes or reads it.
 
 ## Polling contract
 
