@@ -631,6 +631,17 @@ class EventRecord(BaseModel):
     ended_at: Optional[str] = None
 
 
+class HarnessRefusal(SystemExit):
+    """A provider refused the request. The operator can fix it; a trace cannot.
+
+    A SystemExit subclass for the same reason `WorkflowError` and `RunAborted`
+    are: the next action is obvious — change the roster, or change an account
+    setting — and a Python stack pointing at agent_pi.py buries it. Lives here
+    rather than in agents.py so a harness module can raise it without importing
+    its caller.
+    """
+
+
 # ── Pi coding agent interface ────────────────────────────────────────────────
 
 class PiRequest(BaseModel):
@@ -707,6 +718,11 @@ class UsageBreakdown(BaseModel):
 
 
 class PiResult(BaseModel):
+    # Set when the harness's LAST assistant turn ended in an error rather than a
+    # response — a provider 401/403/404, a stream failure. Carried out of the
+    # adapter so the caller can tell "the model refused" from "the model
+    # answered badly", which every parse error otherwise looks like.
+    error_message: str = ""
     text: str = ""
     returncode: int = 0
     session_id: str = ""

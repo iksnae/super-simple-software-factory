@@ -16,7 +16,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Callable, Optional
 
-from .data_types import PiRequest, PiResult
+from .data_types import HarnessRefusal, PiRequest, PiResult
 from .utils import now_iso, operator_env
 
 PI_PATH = os.environ.get("PI_PATH", "pi")
@@ -324,6 +324,13 @@ def run(request: PiRequest, on_event: Optional[Callable[[dict], None]] = None,
             if event.get("type") == "message_end":
                 message = event.get("message", {})
                 if message.get("role") == "assistant":
+                    # Remember the LAST turn's error, and clear it when a turn
+                    # succeeds — a run that errors, retries, and then answers is
+                    # not a failed run.
+                    if message.get("stopReason") == "error":
+                        result.error_message = str(message.get("errorMessage") or "")[:600]
+                    else:
+                        result.error_message = ""
                     text = _text_of(message)
                     if text:
                         result.text = text   # last assistant message wins
@@ -346,4 +353,13 @@ def run(request: PiRequest, on_event: Optional[Callable[[dict], None]] = None,
         on_exit(process.pid)
     if result.returncode != 0 and not result.text:
         raise RuntimeError(f"pi exited {result.returncode}: {stderr.strip()[-800:]}")
+    # pi exits 0 while reporting a provider refusal INSIDE the stream, so exit
+    # code alone cannot see it. Without this, a 401/403/404 reaches the parser as
+    # an empty response and is reported as "no JSON object found" — the caller
+    # then spends its retry budget re-asking a refusal for JSON. Measured four
+    # times: an invalid-auth 401, a MODEL_NOT_IN_PLAN 403, a stream error, and an
+    # allowed-providers 404 that killed the first sdlc run.
+    if result.error_message and not result.text:
+        raise HarnessRefusal(
+            f"{provider}/{model_id} refused the request: {result.error_message}")
     return result
