@@ -162,6 +162,14 @@ Current as of the skill-and-UI restoration; correct this list when you close one
   `stopReason: "error"` with an `errorMessage`, and nothing reads it. A 401 was
   reported as "never produced valid BuildOutput JSON" and burned both retries
   re-asking for JSON. Fixing this is small and high-value.
+- **A killed run reports $0.** `run.add_usage` is called once, after the harness
+  returns, so a run stopped mid-turn loses its whole cost accounting. Measured:
+  a scout killed by an outer `timeout` recorded `tokens 0, cost $0.0000` while
+  its own raw_output.jsonl carried 331,366 tokens and $0.0076 — `just obs costs`
+  showed a free run that was not free. The fix is a fifth name in the harness
+  contract (`turn_usage(event)` beside resolve_model / assistant_message_records
+  / ToolCallTracker / run) so the event forwarder can record per turn, with the
+  final `add_usage` reconciling the difference.
 - **The loops and commit phases have never run.** `verify_loop`, `review_loop`,
   and every `commit` step are unexercised.
 - **Agents no longer inherit the full environment, but `bash` still reads

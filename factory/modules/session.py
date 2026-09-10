@@ -29,7 +29,13 @@ def _finalize_when_killed(run: Run) -> None:
     """
     def handler(signum, _frame):
         run.tracer.session_finish(run.adw_id, ok=False)   # also closes process rows
-        raise SystemExit(128 + signum)
+        # Named, not numbered. `SystemExit(143)` reaches the phase recorder as
+        # the string "143", and a trace whose only account of a killed run is a
+        # bare integer tells a reader nothing — observed on a run stopped by an
+        # outer `timeout`, where the phase error read exactly `143`.
+        name = signal.Signals(signum).name
+        raise SystemExit(f"killed by {name} — the run was stopped from outside, "
+                         f"not by a failure inside it")
 
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, handler)
