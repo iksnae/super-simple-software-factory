@@ -24,7 +24,7 @@ import {
 } from 'lucide-vue-next'
 import { fmtClock, payloadOk, ts } from '../lib/format'
 import { highlightJson, highlightJsonText } from '../lib/highlight'
-import { eventLabel, parseAgentStart, parseToolCall } from '../lib/events'
+import { eventLabel, parseAgentStart, parsePayload, parseToolCall } from '../lib/events'
 import { modelIcon, modelName } from '../lib/models'
 import { fetchPrompts, type PromptsResponse } from '../lib/api'
 import { renderMarkdown } from '../lib/markdown'
@@ -262,6 +262,15 @@ const typeClass: Record<string, string> = {
   handoff: 't-violet',
   agent_start: 't-purple',
   agent_end: 't-green',
+  thinking: 't-purple',
+  agent_message: 't-violet',
+}
+
+/** The complete thought/response text of a thinking or agent_message event. */
+function messageText(e: EventRow): string | null {
+  if (e.type !== 'thinking' && e.type !== 'agent_message') return null
+  const text = parsePayload(e.payload_json)?.text
+  return typeof text === 'string' && text ? text : null
 }
 
 // ── Compiled prompts ─────────────────────────────────────────────────────────
@@ -659,6 +668,9 @@ function togglePanel(id: string) {
             <template v-else-if="e.type === 'tool_call' && e.payload_json">
               <div class="faint">no detail available — legacy event payload</div>
               <pre class="p-pre" v-html="highlightJson(e.payload_json)" />
+            </template>
+            <template v-else-if="messageText(e)">
+              <pre class="p-pre p-prose">{{ messageText(e) }}</pre>
             </template>
             <template v-else-if="e.payload_json">
               <h4>payload</h4>
@@ -1261,5 +1273,11 @@ h3:first-child {
 
 .t-violet {
   color: var(--violet);
+}
+
+/* Complete thoughts and responses read as prose, not data. */
+.p-prose {
+  white-space: pre-wrap;
+  line-height: 1.55;
 }
 </style>

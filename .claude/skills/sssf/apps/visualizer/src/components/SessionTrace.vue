@@ -435,6 +435,9 @@ function selectPhase(p: Phase) {
       <StatusChip :status="session.status ?? 'fail'" />
       <span class="dim">started {{ fmtDate(session.started_at) }}</span>
       <span class="run-stats">
+        <span v-if="session.adw_name" class="strip-adw" :title="session.adw_name">{{
+          session.adw_name
+        }}</span>
         <StatChip kind="cost" :value="session.total_cost" />
         <StatChip kind="runtime" :value="sessionDurationMs" />
         <StatChip kind="tokens" :value="session.total_tokens" />
@@ -584,6 +587,15 @@ function selectPhase(p: Phase) {
   display: inline-flex;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+/* Same voice as the session card's ADW name — mono, cyan. */
+.strip-adw {
+  font-family: var(--mono);
+  color: var(--cyan);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .waterfall {

@@ -7,6 +7,7 @@
 
 const MODEL_ICONS: [needles: string[], icon: string][] = [
   [['claude', 'opus', 'sonnet', 'haiku'], '/models/claude.png'],
+  [['deepseek'], '/models/deepseek.png'],
   [['gemini'], '/models/gemini.png'],
   [['kimi', 'moonshot'], '/models/kimi.png'],
   [['gpt', 'openai', 'codex', 'o3', 'o4'], '/models/openai.png'],

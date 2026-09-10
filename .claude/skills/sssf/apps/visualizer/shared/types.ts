@@ -15,12 +15,14 @@ export type PhaseStatus = "queued" | "running" | "success" | "fail";
 /** phases.kind — decides which lane a block renders in. */
 export type PhaseKind = "engineer" | "code" | "agent";
 
-/** events.type — the ten types tracer.py emits. */
+/** events.type — the twelve types tracer.py emits. */
 export type EventType =
   | "phase_start"
   | "phase_end"
   | "agent_start"
   | "agent_end"
+  | "thinking"
+  | "agent_message"
   | "tool_call"
   | "handoff"
   | "gate_pass"
