@@ -58,50 +58,7 @@ that these are **file** credentials, not environment variables: probed with
 normally. That is why `defaults.env` in `config/base.yaml` can withhold every
 key in your shell without breaking a run (see `docs/CONFIG.md`).
 
-`commandcode` does NOT appear in `auth.json` and works anyway — it carries its
-own catalog at `~/.pi/agent/commandcode-models.json` and needs nothing from the
-environment.
-
-Three matter here:
-
-### `commandcode` — the open-weight lane
-
-69 models through pi: Kimi, GLM, Qwen, DeepSeek, MiniMax, Step, grok, plus
-`:free` entries. `config/rosters/commandcode.yaml` staffs it.
-
-**Plan-gated and metered.** Both halves matter. A model appearing in
-`pi --list-models` is not an entitlement — `claude-sonnet-5` is in the catalog
-and returns `403 MODEL_NOT_IN_PLAN` on this plan. And unlike `openai-codex`,
-the costs are real rather than notional.
-
-Probed 2026-09-10, one-word prompt, ~8K tokens each:
-
-| model | cost | |
-| --- | --- | --- |
-| `moonshotai/Kimi-K3` | $0.02292 | in plan |
-| `xai/grok-4.6` | $0.01757 | in plan |
-| `Qwen/Qwen3.8-Max` | $0.01705 | in plan |
-| `zai-org/GLM-5.3` | $0.01062 | in plan |
-| `moonshotai/Kimi-K2.7-Code` | $0.00667 | in plan |
-| `deepseek/deepseek-v4-pro` | $0.00551 | in plan |
-| `MiniMaxAI/MiniMax-M3` | $0.00240 | in plan |
-| `deepseek/deepseek-v4-flash` | $0.00181 | in plan |
-| `stepfun/Step-3.7-Flash` | $0.00170 | in plan |
-| `Qwen/Qwen3.8-Flash` | $0.00135 | in plan |
-| `z-ai/glm-5.3-flash` | $0.00109 | in plan |
-| `inclusionai/ling-3.0-flash-sante:free` | $0 | in plan |
-| `claude-sonnet-5` | — | 403 MODEL_NOT_IN_PLAN |
-| `meta/muse-spark-1.3` | — | stream error |
-
-`sf doctor` cannot catch a plan gate: it confirms a model RESOLVES in the
-catalog, never that the provider will serve it. Re-probe before restaffing a
-lane.
-
-**`meta/muse-spark-1.3` is blocked on an account setting, not on config.** On
-commandcode it returns "Stream error occurred" with zero tokens; the same model
-on openrouter returns `403 … requires 18+ age confirmation. Confirm at
-https://openrouter.ai/settings/preferences`. Confirm there, re-probe, and it
-can take the scout or documenter lane.
+Two matter here:
 
 ### `openai-codex` — the ChatGPT subscription
 
