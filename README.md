@@ -250,7 +250,7 @@ raises. `--owner` applies only to workflows with exactly one agent step.
 fight over the same files.
 
 **One inconsistency inherited from upstream, left alone deliberately.** Four of the
-five rosters restrict the planner and documenter with `writes:`; `frontier` declares
+original five rosters restrict the planner and documenter with `writes:`; `frontier` declares
 neither, so under that roster both agents are unrestricted (except
 `protected_files`). Tightening it would change a roster's safety semantics, which is
 your call, not a migration's — but know it before you run `--roster frontier`.
