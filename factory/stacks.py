@@ -239,29 +239,85 @@ CONTEXT_MARKERS = (
 
 ECOSYSTEMS = (_detect_js, _detect_python, _detect_rust, _detect_swift, _detect_go)
 
-# Where a monorepo conventionally keeps its members. Detection reads only the repo
-# ROOT — walking a tree and guessing which member is "the" app would be inventing
-# an answer — but a root with no manifest and manifests one level down is worth
-# SAYING, because the alternative is an operator staring at an empty config
-# wondering whether detection ran at all.
+# Where a monorepo conventionally keeps its members. Detection generates commands
+# only for the repo ROOT — walking a tree and guessing which member is "the" app
+# would be inventing an answer — but a manifest below the root is always worth
+# SAYING.
 MEMBER_DIRS = ("apps", "packages", "services", "libs", "crates", "modules")
 
 MANIFESTS = ("package.json", "pyproject.toml", "Cargo.toml", "Package.swift", "go.mod")
 
+# Never descended into: build output, dependency trees, and vendored source. A
+# manifest in any of them belongs to somebody else's project.
+SKIP_DIRS = {
+    "node_modules", ".git", "target", "dist", "build", "vendor", ".venv", "venv",
+    "__pycache__", ".sssf", "Pods", ".build", "DerivedData", ".next", "out",
+}
+
+# The invocation that runs a nested manifest FROM THE ROOT, which is the only
+# place a check ever runs. Each takes no shell, so `cd x && y` is not available
+# and these flags are the argv-native equivalent.
+NESTED_INVOCATION = {
+    "Cargo.toml": "[cargo, test, --manifest-path, {path}]",
+    "go.mod": "[go, test, ./...]        # run from {dir}, or use a go.work",
+    "package.json": "[npm, --prefix, {dir}, test]",
+    "Package.swift": "[swift, test, --package-path, {dir}]",
+    "pyproject.toml": "[uv, run, --directory, {dir}, pytest, -q]",
+}
+
 
 def _member_manifests(root: Path) -> list[str]:
+    """Every manifest below the root, to two levels. Paths, repo-relative.
+
+    Two levels because that covers both shapes seen in the wild: a sibling
+    component at the top (`src-tauri/Cargo.toml`) and a conventional monorepo
+    member (`packages/api/package.json`). Deeper than that and the hits are
+    fixtures and examples rather than the project.
+
+    This used to scan MEMBER_DIRS only, and only when the root had no manifest
+    at all. Measured consequence: a Tauri app with package.json at the root and
+    Cargo.toml in src-tauri/ was reported as `detected: npm` with no mention of
+    Rust anywhere — half the application invisible, and silently, because the
+    scan was gated on having found nothing. A repo that is polyglot is exactly
+    the repo that needs telling.
+    """
     found = []
-    for parent in MEMBER_DIRS:
-        directory = root / parent
-        if not directory.is_dir():
+    for child in sorted(root.iterdir()):
+        if not child.is_dir() or child.name in SKIP_DIRS or child.name.startswith("."):
             continue
-        for child in sorted(directory.iterdir()):
-            if not child.is_dir():
+        for manifest in MANIFESTS:
+            if (child / manifest).is_file():
+                found.append(f"{child.name}/{manifest}")
+        for grandchild in sorted(child.iterdir()):
+            if (not grandchild.is_dir() or grandchild.name in SKIP_DIRS
+                    or grandchild.name.startswith(".")):
                 continue
             for manifest in MANIFESTS:
-                if (child / manifest).is_file():
-                    found.append(f"{parent}/{child.name}/{manifest}")
+                if (grandchild / manifest).is_file():
+                    found.append(f"{child.name}/{grandchild.name}/{manifest}")
     return found
+
+
+def _nested_note(members: list[str], detected: bool) -> str:
+    """What to tell the operator about manifests the generated config ignores."""
+    lines = []
+    for path in members[:8]:
+        name = path.rsplit("/", 1)[1]
+        form = NESTED_INVOCATION.get(name)
+        if form:
+            lines.append(f"      {path}  ->  argv: "
+                         + form.format(path=path, dir=path.rsplit("/", 1)[0]))
+        else:
+            lines.append(f"      {path}")
+    more = f"\n      … and {len(members) - 8} more" if len(members) > 8 else ""
+    lead = ("nothing at the repo root, but manifests exist further in"
+            if not detected else
+            "MORE THAN ONE STACK: the commands above cover the repo ROOT only, "
+            "and these manifests below it got NO checks")
+    return (f"{lead}:\n" + "\n".join(lines) + more
+            + "\n      Detection generates for the root only. Add what you want "
+              "yourself — the argv above runs each from the root, since checks "
+              "take no shell.")
 
 
 def detect(root: str | Path) -> Stack:
@@ -294,16 +350,15 @@ def detect(root: str | Path) -> Stack:
                 f"install — the repo knows what it calls things")
             break
 
+    # Scanned WHETHER OR NOT the root matched. A polyglot repo is precisely the
+    # one that needs telling, and gating this on `not stack.detected` is what
+    # made a Tauri app's whole Rust half invisible.
+    members = _member_manifests(root)
+    if members:
+        stack.notes.append(_nested_note(members, stack.detected))
+
     if not stack.detected:
-        members = _member_manifests(root)
-        if members:
-            stack.notes.append(
-                "nothing at the repo root, but manifests exist further in: "
-                + ", ".join(members[:6])
-                + (" …" if len(members) > 6 else "")
-                + ". Detection reads only the root, so write those commands yourself "
-                  "— run them from the root, the way you would by hand")
-        elif recipes:
+        if not members and recipes:
             stack.notes.append(
                 "no manifest recognised; this repo has a justfile, so its recipes "
                 f"are the likeliest source of commands: {', '.join(recipes[:8])}")
