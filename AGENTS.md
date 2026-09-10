@@ -130,6 +130,34 @@ exactly that reason. So:
 - **Update the verification section when you verify something.** It is the only
   place a reader learns which paths have actually run.
 
+## The onboarder
+
+Onboarding is deterministic first, then agent — and the split is structural, not
+a preference.
+
+`sf init` reads MANIFESTS (`factory/stacks.py`). It is exact, free, and blind to
+prose. The commands a project actually verifies itself with are frequently
+stated only in prose: a Tauri app's `cargo check` lives in `AGENTS.md`, and an
+uninstalled Python package's `PYTHONPATH=src` lives in `CLAUDE.md` and nowhere a
+scan can reach. Both were measured — detection produced a config that could not
+pass on the second one.
+
+So `sf init` ends by handing the operator to `sf run onboard`, whose `onboarder`
+agent reads the prose and proposes what the scan could not see, each command
+cited to a `file:line`. It proposes; it never edits `sssf.config.yaml`
+(`writes: []`). The operator merges.
+
+**The role is defined in `config/base.yaml`, not per roster.** Agents merge by
+name across `extends`, so one definition reaches all six rosters and any of them
+may still override its model. Onboarding is the same job in every repo.
+
+**Its prompts carry the command contract** — argv with no shell, `env` as
+`argv[0]`, `--manifest-path`/`--prefix` instead of `cd`, the prepare/quality
+split, and group discipline. That contract used to live in whatever the operator
+typed into the run prompt, which made the quality of an onboarding depend on who
+launched it. If you change how checks are invoked, change
+`config/prompts/onboarder/system.md` in the same edit.
+
 ## Lanes
 
 `config/base.yaml` declares `lanes:` — kinds of work, and the floor a model must

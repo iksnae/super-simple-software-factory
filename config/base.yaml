@@ -87,10 +87,38 @@ lanes:
     reasoning: true
   mechanical:
     description: Reads and reports. Small models belong here.
-    agents: [scout, documenter]
+    agents: [scout, documenter, onboarder]
     min_context: 32000
     # reasoning omitted: not required, not refused.
 
+
+# The one agent defined HERE rather than per roster.
+#
+# Agents merge by name across the `extends` chain, so a definition in base is
+# inherited by all six rosters and any of them can still override its model.
+# It belongs here because onboarding is the same job in every repo — the roster
+# decides who is available to build, not how a repo is assessed — and because
+# repeating one role six times is the duplication this layering exists to end.
+#
+# Its prompts carry the command contract (argv, no shell, `env` as argv[0], the
+# prepare/quality split, group discipline). That contract used to live in
+# whatever the operator typed into the run prompt, which meant the quality of an
+# onboarding depended on who launched it.
+agents:
+  - name: onboarder
+    color: "#38bdf8"
+    purpose: Read how a repo says it is verified, and propose the checks its config should hold.
+    prompt_engineering:
+      system: config/prompts/onboarder/system.md
+      user: config/prompts/onboarder/user.md
+    writes: []                     # proposes only; the operator merges the config
+    tools:                         # full read surface; write for its two artifacts
+      - read
+      - grep
+      - find
+      - ls
+      - bash
+      - write
 
 observability:
   db: .sssf/data/sssf.db
@@ -157,7 +185,7 @@ workflows:
         description: Capture what this repo is and how its people say it is verified
       - step: agent
         name: assess
-        owner: scout
+        owner: onboarder
         output: ScoutOutput
         gates: [artifacts_exist, files_non_empty]
         description: Read how this repo verifies itself and propose the checks the

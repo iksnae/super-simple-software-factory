@@ -391,7 +391,19 @@ def cmd_init(args) -> int:
         print(f"  note: {note}")
     print(f"  prepare: {', '.join(c.name for c in stack.prepare) or '(none)'}")
     print(f"  checks:  {', '.join(c.name for c in stack.checks) or '(none — fill in `test`)'}")
-    print(f"next: review it, then `sf check --repo {repo}`")
+    # Detection reads MANIFESTS. It is structurally blind to prose, and the
+    # commands a project actually verifies itself with are often stated only
+    # there: a Tauri app's cargo checks live in AGENTS.md, and an uninstalled
+    # Python package's `PYTHONPATH=src` lives in CLAUDE.md and nowhere a scan
+    # can reach. Sending the operator straight to `sf check` sends them to the
+    # step that CANNOT find what was just missed — it validates the config that
+    # was written, not the one that should have been.
+    print("next:")
+    print("  1. read what it inferred above — detection reads manifests, not prose")
+    print(f"  2. `sf run onboard \"assess this repo\" --repo {repo}`")
+    print("     one agent reads how this project says it is verified and proposes")
+    print("     the checks a manifest scan cannot see, each cited to a file:line")
+    print(f"  3. merge what you agree with, then `sf check --repo {repo}`")
     return 0
 
 
