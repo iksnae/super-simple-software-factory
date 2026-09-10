@@ -24,7 +24,8 @@ That is the whole job:
 **If the shape and the repo's own guidance do not settle it, you are done
 looking.** Write "unclear" and say what would settle it. A repo where it is
 still unclear how to build or test is not an onboarding problem to solve — it
-is a finding to report.
+is a finding to report, and `sf run investigate` is the workflow that takes it
+from there.
 
 Do not open ADRs, design documents, plans, changelogs, source files, git
 history, or vendored trees. Nothing in them is worth the time here.

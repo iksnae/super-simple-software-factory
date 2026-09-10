@@ -175,6 +175,31 @@ workflows:
         output: GenericOutput
         description: Answer the ask directly, with no surrounding chain
 
+  investigate:
+    description: Dig into one specific question until it is answered, with evidence.
+    # The counterweight to `onboard`. Onboarding is shape recognition and is
+    # deliberately bounded — twenty reads, no ADRs, no history, no source — and
+    # when the shape does not settle something it reports "unclear" and stops.
+    # This is where that unclear thing goes.
+    #
+    # Depth is the POINT here, and it is bought deliberately rather than spent by
+    # accident: the operator names one question and pays for the answer. The two
+    # findings that bounded onboarding gave up — a check recorded red repo-wide in
+    # a plan document, and a prepare step reverted in history for shadowing src/ —
+    # are exactly this workflow's work.
+    needs_prepare: false
+    steps:
+      - step: request
+        description: Capture the one question being paid for
+      - step: agent
+        name: investigate
+        owner: scout
+        output: ScoutOutput
+        gates: [artifacts_exist, files_non_empty]
+        description: >-
+          Answer the question with evidence — read whatever settles it, including
+          history, ADRs, plans and source, and cite what you relied on
+
   onboard:
     description: Work out how this repo must be configured for the factory to verify it.
     # The whole point is to run BEFORE the config is trustworthy, so it cannot

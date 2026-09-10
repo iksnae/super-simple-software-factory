@@ -48,7 +48,9 @@ Two short files, then your `Report` JSON. **Length is a defect here.**
   - **Not checkable** — a line each, at most three. What is stated but cannot be
     a check here, and why.
   - **Unclear** — a line each. What you could not settle, and what would settle
-    it.
+    it. Phrase each as a question someone could hand to
+    `sf run investigate "<the question>"`, which is the workflow that exists to
+    answer it. Resolving it is not your job.
 
 ## Report
 
