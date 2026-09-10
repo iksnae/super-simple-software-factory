@@ -159,8 +159,14 @@ can check.
 Current as of the skill-and-UI restoration; correct this list when you close one.
 
 - **No tests, no CI.** Everything above.
-- **`sf doctor` checks one credential.** It confirms models RESOLVE in pi's
-  catalog, never that the provider authenticates. This has already cost a run.
+- **`sf doctor --probe` answers this; plain `doctor` still cannot.** The catalog
+  says what EXISTS. It knows nothing about whether your key is valid, whether
+  your plan includes the model, or whether your account's allowed-providers
+  setting permits the upstream serving it. Five measured instances reached a
+  phase before anything asked a provider directly: a 401, a 403
+  MODEL_NOT_IN_PLAN, a stream error, a 404 naming an account setting, and the
+  provider refusal that killed the first sdlc attempt. `--probe` is opt-in
+  because it is the only check in doctor that spends.
 - **Harness errors are misreported as parse failures.** `agent_pi.run` raises only
   on a non-zero exit; a provider error arrives inside the event stream as
   `stopReason: "error"` with an `errorMessage`, and nothing reads it. A 401 was

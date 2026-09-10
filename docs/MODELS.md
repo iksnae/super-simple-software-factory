@@ -49,6 +49,29 @@ pi --list-models | awk '$1=="openai-codex"{print $2}'
 
 ---
 
+## Does a model actually serve you?
+
+```bash
+sf doctor --repo <repo> --probe     # asks each roster model to answer once
+```
+
+`pi --list-models` lists what exists. It cannot tell you whether your key is
+valid for a model, whether your plan includes it, or whether your OpenRouter
+account's allowed-providers setting permits the upstream that serves it. Those
+are three different refusals and all of them used to arrive at a phase as
+"no JSON object found in the response".
+
+Measured on this host: the `default` roster's planner and documenter are BOTH
+unservable —
+
+    404: No allowed providers are available for the selected model.
+    Providers serving google/gemini-3.6-flash: google-ai-studio, google-vertex,
+    but your account's allowed-providers setting permits only:
+    groq, meta, minimax, mistral, deepseek.
+
+`--probe` is opt-in because it is the only check in `doctor` that spends money.
+Run it when onboarding a machine or an account, not on every run.
+
 ## Providers on this host
 
 `~/.pi/agent/auth.json` holds which providers are authenticated — on this host:

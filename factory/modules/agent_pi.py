@@ -143,6 +143,53 @@ def supports_reasoning(provider: str, model_id: str) -> Optional[bool]:
     return None
 
 
+def probe(model_pattern: str, timeout_seconds: int = 90) -> tuple[bool, str]:
+    """Ask a model to answer once. Returns (served, message).
+
+    The catalog cannot answer this. `pi --list-models` lists what EXISTS; it
+    knows nothing about whether your key is valid for it, whether your plan
+    includes it, or whether your account's allowed-providers setting permits the
+    upstream that serves it. Four separate failures reached a phase as
+    "no JSON object found in the response" before anything asked the provider
+    directly: a 401, a 403 MODEL_NOT_IN_PLAN, a stream error, and a 404 naming
+    an account setting.
+
+    Deliberately minimal: no tools, a one-word system prompt, a one-word ask.
+    What is being tested is whether a turn comes back at all.
+    """
+    try:
+        provider, model_id = resolve_model(model_pattern)
+    except ValueError as error:
+        return False, str(error)
+
+    cmd = [PI_PATH, "-p", "--mode", "json", "--provider", provider,
+           "--model", model_id, "--system-prompt", ".", "say ok"]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True,
+                                timeout=timeout_seconds, env=operator_env(),
+                                stdin=subprocess.DEVNULL, check=False)
+    except subprocess.TimeoutExpired:
+        return False, f"no answer within {timeout_seconds}s"
+    except OSError as error:
+        return False, str(error)
+
+    served, message = False, "the model returned nothing"
+    for line in result.stdout.splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        body = event.get("message", {}) or {}
+        if event.get("type") != "message_end" or body.get("role") != "assistant":
+            continue
+        if body.get("stopReason") == "error":
+            served, message = False, str(body.get("errorMessage") or "")[:300]
+        elif _text_of(body).strip():
+            # A later good turn wins: a retry that succeeds is not a failure.
+            served, message = True, "answered"
+    return served, message
+
+
 def _text_of(container: dict) -> str:
     """Join the text blocks of anything pi shapes as {content: [...]} — a
     message or a tool result."""

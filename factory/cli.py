@@ -264,6 +264,18 @@ def cmd_doctor(args) -> int:
           ", ".join(missing) if missing else
           f"{len(cfg.prepare)} prepare + {len(cfg.quality.checks)} checks")
 
+    # Opt-in, because it SPENDS and it is the only check here that does. Every
+    # other line in doctor reads config or the filesystem; this one asks each
+    # provider whether it will actually serve you, which is the question the
+    # catalog cannot answer.
+    if getattr(args, "probe", False):
+        print()
+        for model in sorted({a.model for a in cfg.agents}):
+            served, message = agent_pi.probe(model)
+            check(f"{model} answers", served, "" if served else message[:160])
+            if not served:
+                print(f"        {message[:400]}")
+
     print(f"\n  factory doctor: {'OK' if ok else 'FAILED'}")
     return 0 if ok else 1
 
@@ -412,8 +424,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     common(sub.add_parser("check", help="validate config + every workflow, no spend")
            ).set_defaults(func=cmd_check)
-    common(sub.add_parser("doctor", help="host prerequisites for this machine")
-           ).set_defaults(func=cmd_doctor)
+    doctor = common(sub.add_parser("doctor", help="host prerequisites for this machine"))
+    doctor.add_argument("--probe", action="store_true",
+                        help="ask each roster model to answer once — costs a few "
+                             "cents, and is the only check that spends")
+    doctor.set_defaults(func=cmd_doctor)
 
     init = common(sub.add_parser("init", help="write a starter config into a repo"))
     init.add_argument("--force", action="store_true")
