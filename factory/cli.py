@@ -344,7 +344,15 @@ def cmd_init(args) -> int:
     if stack.names:
         body.append(f"# Detected stack: {', '.join(stack.names)}")
     for note in stack.notes:
-        body.append(f"#   note: {note}")
+        # EVERY line gets a `#`. A note may be multi-line — the nested-manifest
+        # one lists a repo's members, one per line — and commenting only the
+        # first put the rest into the file as raw YAML. Measured on a pnpm
+        # monorepo: `sf init` wrote a config that then failed to parse with
+        # "expected <block end>", on exactly the polyglot repos that note exists
+        # to serve.
+        lines = note.splitlines() or [""]
+        body.append(f"#   note: {lines[0]}")
+        body.extend(f"#   {extra}" for extra in lines[1:])
     body.append("# Every command below was inferred by reading this repo. Read them, fix what")
     body.append("# is wrong, delete what you do not want — none of it is applied invisibly.")
     body.append("")
