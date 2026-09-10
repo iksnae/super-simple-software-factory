@@ -144,7 +144,12 @@ Current as of the skill-and-UI restoration; correct this list when you close one
   re-asking for JSON. Fixing this is small and high-value.
 - **The loops and commit phases have never run.** `verify_loop`, `review_loop`,
   and every `commit` step are unexercised.
-- **Agents inherit the full environment.** `utils.operator_env()` copies
-  `os.environ` to every agent, plus both `.env` files. `writes:` bounds what an
-  agent may change; nothing bounds what it may read.
+- **Agents no longer inherit the full environment, but `bash` still reads
+  files.** `defaults.env` (see `docs/CONFIG.md`) withholds credential-shaped
+  variables — measured at 31 on this machine, with the agent still
+  authenticating, because pi reads `~/.pi/agent/auth.json` rather than the
+  shell. What remains open is that an agent holding `bash` can read that file,
+  or a shell rc, directly. Env scoping raises the cost of an accident; only an
+  OS sandbox is a boundary, and `coding_agent: codex --sandbox read-only` is
+  still unverified.
 - **`coding_agent: claude_code` is a stub.** It raises one clear sentence.

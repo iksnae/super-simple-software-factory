@@ -183,6 +183,58 @@ defaults:
 Gitignore `.sssf/data/`. The engine lives outside your repo, so no pattern is
 needed to protect it — an agent cannot reach it at all.
 
+## `env:` — what an agent may READ
+
+`writes:` bounds what an agent may CHANGE. Nothing bounded what it may read
+until this: `operator_env()` copies the engineer's whole environment into every
+agent process, so every unrelated credential in the shell reached every agent on
+every repo.
+
+```yaml
+defaults:
+  env:
+    deny:  ["*_KEY", "*_SECRET", "*_TOKEN", "*_PASSWORD", "*_CREDENTIALS"]
+    allow: []
+
+agents:
+  - name: builder
+    env:
+      allow: [NPM_TOKEN]        # widens the roster policy; never narrows it
+```
+
+Names or globs, matched case-sensitively against variable names:
+
+| Match | Result |
+| --- | --- |
+| `allow` | passed through, **even if `deny` also matches** — it is an exception list |
+| `deny` | withheld |
+| neither | passed through |
+
+Defaults and per-agent policies **union**. An agent naming one extra `allow`
+keeps every `deny` the roster set, because the alternative — replacing the
+policy — means adding one allow silently drops the whole deny list.
+
+`ESSENTIAL_ENV` in `factory/modules/utils.py` (`PATH`, `HOME`, `SHELL`, `LANG`,
+`TMPDIR`, …) is never withheld, so `deny: ["*"]` withholds every credential
+rather than breaking the subprocess before it starts.
+
+Withheld **names** are printed on the agent's phase and recorded in the
+`agent_start` event as `env_withheld`. Never values. A credential that silently
+fails to arrive surfaces as an authentication error far from its cause.
+
+**Why `allow` is empty by default.** pi keeps provider credentials in
+`~/.pi/agent/auth.json`, not in the environment — openrouter, deepseek,
+moonshotai, github-copilot and openai-codex alike. Probed: `env -u
+OPENROUTER_API_KEY pi -p --provider openrouter …` answers normally, and a real
+scout run with 31 variables withheld authenticated and completed. The harness
+needs `HOME`; it needs no key from your shell.
+
+**What this does NOT do.** It filters the environment, and that is all. An agent
+holding `bash` can still read files — including `~/.pi/agent/auth.json` and your
+shell rc. This raises the cost of an accident; it is not a sandbox. The OS
+boundary is `coding_agent: codex` with `--sandbox read-only`, which remains
+unverified.
+
 ## `workflows:` — the phase graph
 
 Merges by name, so this adds to the stock twelve rather than replacing them.

@@ -15,7 +15,7 @@ from typing import Optional
 
 import yaml
 
-from . import agent_cc, agent_codex, agent_pi, permissions, prompts
+from . import agent_cc, agent_codex, agent_pi, permissions, prompts, utils
 from .data_types import (AgentCall, AgentConfig, EnvelopeBase, EventRecord,
                          GateCheck, GateReport, Phase, PiRequest, PiResult,
                          SSSFConfig, UsageBreakdown)
@@ -27,6 +27,9 @@ JSON_FIX_ATTEMPTS = 2      # continue-with-correction attempts for malformed JSO
 
 # Keys an agent inherits from `defaults` unless it states its own.
 INHERITED = ("coding_agent", "model", "thinking", "color", "tools", "writes")
+# `env` is deliberately NOT inherited wholesale: it is UNIONED with the
+# roster default in `_env_for` below, so an agent naming one extra allow
+# keeps every deny the roster set instead of replacing the policy.
 
 # How deep an `extends:` chain may go before we call it a cycle. A roster
 # extending a roster extending a base is already more indirection than a config
@@ -48,6 +51,24 @@ HARNESSES = {
 }
 
 IMPLEMENTED = ("pi", "codex")
+
+
+def _env_for(run, agent: AgentConfig) -> tuple[dict[str, str], list[str]]:
+    """The environment this agent's process gets, and the names withheld from it.
+
+    The roster policy and the agent's own are UNIONED rather than replaced. An
+    agent that needs one more credential says so and still inherits every deny
+    the roster set — the alternative, letting `env:` on an agent override the
+    default outright, means adding one allow silently drops the whole deny list,
+    which is the failure mode this feature exists to prevent.
+    """
+    policy = run.cfg.defaults.env.merged_with(agent.env)
+    kept, withheld = utils.scoped_env(utils.operator_env(), policy)
+    if withheld:
+        run.console.note(f"{agent.name}: {len(withheld)} env var(s) withheld "
+                         f"({', '.join(withheld[:4])}"
+                         f"{', …' if len(withheld) > 4 else ''})")
+    return kept, withheld
 
 
 def harness(agent: AgentConfig):
@@ -247,6 +268,7 @@ def execute(run, phase: Phase, call: AgentCall) -> EnvelopeBase:
     prompts.save(agent_dir / "prompts", "user.md", user_text)
 
     session_id = _agent_session_id(run, agent)
+    agent_env, withheld = _env_for(run, agent)
     run.tracer.event(EventRecord(adw_id=run.adw_id, phase_id=phase.phase_id,
                                  type="agent_start", name=agent.name,
                                  payload={"model": agent.model, "thinking": agent.thinking,
@@ -255,7 +277,12 @@ def execute(run, phase: Phase, call: AgentCall) -> EnvelopeBase:
                                           "coding_agent": agent.coding_agent,
                                           "purpose": agent.purpose,
                                           "tools": agent.tools,  # None = all tools
-                                          "harness_engineering": agent.harness_engineering}))
+                                          "harness_engineering": agent.harness_engineering,
+                                          # NAMES only, never values. A credential
+                                          # that silently fails to arrive surfaces as
+                                          # an auth error far from its cause, so the
+                                          # run records what it withheld.
+                                          "env_withheld": withheld}))
     run.console.agent_started(agent.name, agent.model, session_id)
 
     # Parse retries and gate corrections re-enter the SAME pi session, so the
@@ -279,6 +306,7 @@ def execute(run, phase: Phase, call: AgentCall) -> EnvelopeBase:
             raw_output_path=str((agent_dir / "raw_output.jsonl").resolve()),
             tools=agent.tools,
             extensions=agent.harness_engineering,
+            env=agent_env,
             cwd=str(run.repo_root),
             sandbox=_sandbox_for(agent),
         )

@@ -225,6 +225,14 @@ its builder to exactly this, and the engine reported it as
 `never produced valid BuildOutput JSON` because nothing reads `stopReason` or
 `errorMessage` off the harness stream.
 
+**Agents are no longer handed your whole shell.** `defaults.env` withholds
+credential-shaped variables from every agent process. Verified with real scout
+runs: 31 variables withheld on this machine — every `*_KEY`, `*_SECRET` and
+`*_TOKEN` in the shell, `OPENROUTER_API_KEY` included — and the agent still
+authenticated, because pi reads `~/.pi/agent/auth.json` and not the
+environment. It filters the environment and nothing more: an agent with `bash`
+can still read that file. See `docs/CONFIG.md`.
+
 **There is no test suite and no CI.** Every claim in this section was earned by
 running the thing, not by a green pipeline. See `AGENTS.md`.
 

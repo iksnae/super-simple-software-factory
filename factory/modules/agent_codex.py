@@ -318,7 +318,8 @@ def run(request: PiRequest, on_event: Optional[Callable[[dict], None]] = None,
     process = subprocess.Popen(cmd, stdin=subprocess.DEVNULL,
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                text=True, bufsize=1, cwd=request.cwd,
-                               env=operator_env())
+                               # From the REQUEST, not the process — see agent_pi.
+                               env=request.env or operator_env())
     if on_spawn:
         on_spawn(process.pid)
 

@@ -278,7 +278,9 @@ def run(request: PiRequest, on_event: Optional[Callable[[dict], None]] = None,
     process = subprocess.Popen(cmd, stdin=subprocess.DEVNULL,
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                text=True, bufsize=1, cwd=request.cwd,
-                               env=operator_env())
+                               # From the REQUEST, not the process: the agent's
+                               # EnvPolicy has already been applied to it.
+                               env=request.env or operator_env())
     if on_spawn:
         on_spawn(process.pid)
     with raw_path.open("a") as raw:

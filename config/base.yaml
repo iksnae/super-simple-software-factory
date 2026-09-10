@@ -22,6 +22,39 @@ defaults:
     - .sssf/
   data_dir: .sssf/data
 
+  # What an agent process may read from the engineer's shell.
+  #
+  # `operator_env()` hands an agent the WHOLE environment, and for toolchains
+  # that is the point — an agent's `bash` should resolve the same `node` the
+  # engineer gets. For credentials it is not: every unrelated key in the shell
+  # otherwise reaches every agent on every repo, and `writes:` does not help,
+  # because it bounds what an agent may CHANGE, never what it may read or send.
+  #
+  # `allow` is an EXCEPTION to `deny`, checked first, for the case where an
+  # agent genuinely needs one credential the deny list would otherwise catch.
+  #
+  # It is EMPTY, and that is a measured result rather than an oversight. pi
+  # keeps its provider credentials in ~/.pi/agent/auth.json — a file, not the
+  # environment — for openrouter, deepseek, moonshotai, github-copilot and
+  # openai-codex alike. Probed directly: `env -u OPENROUTER_API_KEY pi -p
+  # --provider openrouter …` answers normally. So the harness needs HOME, which
+  # is essential and never withheld, and no key from the shell at all.
+  #
+  # Local and open providers (lmstudio, commandcode) need even less.
+  #
+  # Add an entry here only when something an AGENT'S TOOLS run needs it — a
+  # private npm registry token for `npm ci`, say — and prefer putting that in
+  # the repo's own config rather than the shared roster.
+  env:
+    deny:
+      - "*_KEY"
+      - "*_SECRET"
+      - "*_TOKEN"
+      - "*_PASSWORD"
+      - "*_CREDENTIALS"
+      - "AWS_ACCESS_KEY_ID"
+    allow: []
+
 observability:
   db: .sssf/data/sssf.db
   poll_ms: 500

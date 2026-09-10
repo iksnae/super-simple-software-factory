@@ -331,6 +331,46 @@ class AgentConfig(BaseModel):
     #   [...] -> only these. A trailing "/" means a directory prefix; a "*"
     #            makes it a glob; anything else is an exact path.
     writes: Optional[list[str]] = None
+    # Widens the roster-wide `defaults.env`; it never narrows it. An agent that
+    # genuinely needs one more credential names it here and keeps every deny
+    # the roster set.
+    env: Optional[EnvPolicy] = None
+
+
+class EnvPolicy(BaseModel):
+    """Which of the operator's environment variables an agent process receives.
+
+    `utils.operator_env()` hands an agent the engineer's WHOLE environment, and
+    that is deliberate for toolchains — an agent's `bash` should resolve the
+    same `node` the engineer gets. It is not deliberate for credentials. Every
+    unrelated key in the shell reaches every agent on every repo, and `writes:`
+    does not help: it bounds what an agent may CHANGE, never what it may read
+    or send.
+
+    Two lists of names or globs, and `allow` is an EXCEPTION to `deny` rather
+    than a separate filter:
+
+        allow matches  -> passed through, even if `deny` also matches
+        deny matches   -> withheld
+        neither        -> passed through
+
+    That ordering is what makes a broad default deny usable: `deny: ["*_KEY"]`
+    with `allow: ["OPENROUTER_API_KEY"]` withholds every key in the shell except
+    the one the harness needs to authenticate.
+
+    Defaults and per-agent policies UNION rather than replace, so an agent
+    naming one extra allow does not silently discard the roster's deny list.
+    """
+
+    allow: list[str] = Field(default_factory=list)
+    deny: list[str] = Field(default_factory=list)
+
+    def merged_with(self, other: "Optional[EnvPolicy]") -> "EnvPolicy":
+        """This policy widened by another's entries. Order is not significant."""
+        if other is None:
+            return self
+        return EnvPolicy(allow=sorted({*self.allow, *other.allow}),
+                         deny=sorted({*self.deny, *other.deny}))
 
 
 class ConfigDefaults(BaseModel):
@@ -356,6 +396,11 @@ class ConfigDefaults(BaseModel):
         "sssf.config.yaml", ".sssf/",
     ])
     data_dir: str = ".sssf/data"
+    # Roster-wide floor for what an agent process may read from the shell.
+    # Empty here so the SCHEMA stays permissive and the POLICY lives in
+    # config/base.yaml, where an operator can read it, extend it, and see what
+    # their agents are being given.
+    env: EnvPolicy = Field(default_factory=EnvPolicy)
 
 
 class ObservabilityConfig(BaseModel):
@@ -558,6 +603,10 @@ class PiRequest(BaseModel):
     tools: Optional[list[str]] = None
     extensions: list[str] = Field(default_factory=list)
     cwd: str = "."                  # set from run.repo_root — the codebase root agents work in
+    # The environment this agent process gets, already filtered by its
+    # EnvPolicy. Carried on the request rather than read inside each adapter so
+    # there is ONE place the decision is made and one place to audit it.
+    env: dict[str, str] = Field(default_factory=dict)
     # OS-level write boundary, honoured by harnesses that have one (codex
     # --sandbox). Derived from `writes`: an agent permitted to change nothing gets
     # a sandbox that CANNOT, instead of a promise that it will not. It does not

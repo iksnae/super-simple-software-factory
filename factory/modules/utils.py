@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fnmatch
 import os
 import secrets
 import subprocess
@@ -60,6 +61,47 @@ def operator_env() -> dict[str, str]:
     parts = [p for p in env.get("PATH", "").split(os.pathsep) if p and p != venv_bin]
     env["PATH"] = os.pathsep.join(parts)
     return env
+
+
+# Names an agent process cannot run without. `deny` never removes these: a
+# policy of `deny: ["*"]` should withhold every credential, not break the
+# subprocess before it starts. None of them carries a secret.
+ESSENTIAL_ENV = (
+    "PATH", "HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "TERM", "TZ",
+    "LANG", "LC_ALL", "LC_CTYPE", "PWD",
+)
+
+
+def scoped_env(env: dict[str, str], policy) -> tuple[dict[str, str], list[str]]:
+    """Apply an EnvPolicy to an environment. Returns (kept, withheld names).
+
+    `allow` is an EXCEPTION to `deny`, checked first, which is what lets a broad
+    default deny stay usable — `deny: ["*_KEY"]` with
+    `allow: ["OPENROUTER_API_KEY"]` withholds every key in the shell except the
+    one the harness authenticates with.
+
+    Returning the withheld NAMES, not just the filtered environment, is
+    deliberate: a credential that silently fails to arrive produces an
+    authentication error three layers away from its cause, and this system has
+    already paid for one of those. The caller traces the names so the run
+    records what its agents were not given. Names only — never values.
+    """
+    if policy is None:
+        return dict(env), []
+
+    def matches(name: str, patterns: list[str]) -> bool:
+        return any(fnmatch.fnmatchcase(name, pattern) for pattern in patterns)
+
+    kept: dict[str, str] = {}
+    withheld: list[str] = []
+    for name, value in env.items():
+        if name in ESSENTIAL_ENV or matches(name, policy.allow):
+            kept[name] = value
+        elif matches(name, policy.deny):
+            withheld.append(name)
+        else:
+            kept[name] = value
+    return kept, sorted(withheld)
 
 
 def new_id(length: int = 8) -> str:

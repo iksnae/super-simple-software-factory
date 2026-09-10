@@ -121,6 +121,31 @@ A breach is **not** a gate violation. Gates are for work an agent can be asked t
 redo; a breach cannot be corrected by re-prompting, because the write already
 happened. It fails the phase and names every offending path.
 
+## Set what an agent may READ
+
+`writes:` bounds changes; `env:` bounds what the agent process receives from the
+engineer's shell.
+
+```yaml
+defaults:
+  env:
+    deny:  ["*_KEY", "*_SECRET", "*_TOKEN", "*_PASSWORD", "*_CREDENTIALS"]
+    allow: []
+```
+
+`allow` is an exception to `deny`, checked first. Defaults and per-agent
+policies union, so an agent adding one `allow` keeps every roster `deny`.
+Withheld names — never values — are printed on the phase and traced as
+`env_withheld` on `agent_start`.
+
+The shipped `allow` is empty because pi authenticates from
+`~/.pi/agent/auth.json`, not the environment. Add an entry only when an agent's
+own TOOLS need one (a private registry token for `npm ci`), and prefer the
+repo's config over the shared roster.
+
+It filters the environment and nothing else: an agent with `bash` can still read
+`~/.pi/agent/auth.json` or a shell rc. Full spec: `docs/CONFIG.md`.
+
 ## Add harness extensions
 
 ```yaml
