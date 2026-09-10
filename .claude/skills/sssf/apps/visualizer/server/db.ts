@@ -28,12 +28,12 @@ import type {
   SessionUsage,
 } from "../shared/types.ts";
 
-const DEFAULT_DB_RELATIVE = "adws/adw_data/sssf.db";
+const DEFAULT_DB_RELATIVE = ".sssf/data/sssf.db";
 const MAX_LIMIT = 1000;
 const DEFAULT_LIMIT = 500;
 
 /**
- * Resolve the db path: --db arg wins, then SSSF_DB, then <cwd>/adws/adw_data/sssf.db.
+ * Resolve the db path: --db arg wins, then SSSF_DB, then <cwd>/.sssf/data/sssf.db.
  * The db lives in the TARGET repo, so cwd is the repo the visualizer is pointed at.
  */
 export function resolveDbPath(argv: string[] = Bun.argv): string {
@@ -48,16 +48,71 @@ export function resolveDbPath(argv: string[] = Bun.argv): string {
   return isAbsolute(raw) ? raw : resolve(process.cwd(), raw);
 }
 
+
+/**
+ * Open the trace for reading, live run or finished one.
+ *
+ * A readonly connection to a WAL database needs the `-shm` shared-index file
+ * and cannot create one. SQLite does not refuse at open() — the handle is
+ * built lazily — so the failure surfaces on the FIRST READ, as
+ * SQLITE_CANTOPEN from whatever query happens to run first (here,
+ * `PRAGMA journal_mode`). Opening and then probing is therefore the only way
+ * to tell the two states apart.
+ *
+ * While an ADW runs, its tracer holds the db open, the `-shm` exists, and the
+ * plain readonly connection is correct — that is the live path and it is tried
+ * first. When the last writer exits the `-shm` goes with it, so every FINISHED
+ * run — the ordinary reason to open the visualizer — lands on the refusal.
+ *
+ * The fallback is `immutable=1`, which tells SQLite the file will not change
+ * underneath it and so may be read without the shared index. That promise is
+ * false while a writer is live, which is exactly why it is a fallback and
+ * never the first attempt: a running trace still has its `-shm` and never
+ * reaches this line.
+ *
+ * Measured on a real trace with its `-shm` removed: the plain connection opens
+ * and then throws SQLITE_CANTOPEN on first read; the immutable one reads all
+ * four sessions.
+ */
+function openReadable(path: string): { db: Database; immutable: boolean } {
+  const probe = (db: Database): Database => {
+    // Any read forces the WAL index open. `sqlite_master` is guaranteed to
+    // exist, so this distinguishes "cannot read" from "table not found".
+    db.query("SELECT count(*) FROM sqlite_master").get();
+    return db;
+  };
+
+  let plain: Database | null = null;
+  try {
+    plain = new Database(path, { readonly: true });
+    return { db: probe(plain), immutable: false };
+  } catch (error) {
+    plain?.close();
+    if ((error as { code?: string }).code !== "SQLITE_CANTOPEN") throw error;
+  }
+
+  // `file:` URIs reserve `?` and `#`; a repo path may legitimately contain
+  // either, and an unescaped one would silently truncate the filename.
+  const uri = `file:${path.replace(/\?/g, "%3f").replace(/#/g, "%23")}?immutable=1`;
+  return { db: probe(new Database(uri, { readonly: true })), immutable: true };
+}
+
 export class SssfDb {
   readonly path: string;
   /**
-   * Where the ADW session dirs live: `{data_dir}/sessions/{adw_id}/{agent}/`.
+   * Where the session dirs live: `{data_dir}/sessions/{adw_id}/{agent}/`.
    * The db sits in the same data_dir (config's `observability.db` defaults to
-   * `adws/adw_data/sssf.db`), so deriving it as a sibling of the db file keeps
-   * working when the whole data_dir is relocated.
+   * `.sssf/data/sssf.db` inside the TARGET repo), so deriving it as a sibling
+   * of the db file keeps working when the whole data_dir is relocated.
    */
   readonly sessionsDir: string;
   readonly journalMode: string;
+  /**
+   * True when the trace was opened as a static snapshot because its `-shm` was
+   * gone — a run that has finished. Nothing else can be inferred from it: the
+   * data is complete, it just will not grow while this process holds it.
+   */
+  readonly immutable: boolean;
   private readonly db: Database;
   /** Opened on first archive and kept; null until then. */
   private writer: Database | null = null;
@@ -74,7 +129,9 @@ export class SssfDb {
     }
     this.path = path;
     this.sessionsDir = resolve(dirname(path), "sessions");
-    this.db = new Database(path, { readonly: true });
+    const opened = openReadable(path);
+    this.db = opened.db;
+    this.immutable = opened.immutable;
 
     // WAL is set by the tracer when it creates the db; a readonly connection
     // cannot change it, so we assert rather than set, and always take the
@@ -85,7 +142,9 @@ export class SssfDb {
       .query<{ journal_mode: string }, []>("PRAGMA journal_mode")
       .get();
     this.journalMode = mode?.journal_mode ?? "unknown";
-    if (this.journalMode.toLowerCase() !== "wal") {
+    // `immutable=1` reports "delete" regardless of what the file says, so the
+    // check only means anything on the live connection.
+    if (!this.immutable && this.journalMode.toLowerCase() !== "wal") {
       console.warn(
         `[db] journal_mode is "${this.journalMode}", expected "wal" — ` +
           `live reads during agent writes may block`,

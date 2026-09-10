@@ -136,3 +136,43 @@ procs REPO=invocation_directory():
 artifacts ADW_ID REPO=invocation_directory():
     @find {{REPO}}/.sssf/data/sessions/{{ADW_ID}}* -type f 2>/dev/null | sort \
       || echo "no session dir for {{ADW_ID}}"
+
+# ─── the visualizer ──────────────────────────────────────────────────────────
+# The UI reads the SAME sqlite file every recipe above queries — one data path,
+# agents -> sqlite -> ui, and the UI gets there by polling. It is read-only with
+# one exception: archiving a session sets `sessions.archived`, review triage that
+# no run ever writes.
+#
+# The db lives in the TARGET repo, so the repo argument is what points the UI at
+# a project. Pass REPO when you are not standing in it.
+
+VIZ := justfile_directory() / ".." / ".claude/skills/sssf/apps/visualizer"
+
+# install the visualizer's dependencies (once, or after a pull)
+ui-install:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    command -v bun >/dev/null || { echo "bun not on PATH — https://bun.sh" >&2; exit 1; }
+    cd "{{VIZ}}" && bun install
+
+# open the visualizer on this repo's trace: http://localhost:4601
+ui REPO=invocation_directory():
+    #!/usr/bin/env bash
+    set -euo pipefail
+    db="{{REPO}}/.sssf/data/sssf.db"
+    # Checked here rather than left to the server, because "no runs yet" and
+    # "wrong repo" produce the same blank screen once the UI is up.
+    [ -f "$db" ] || { echo "no trace db at $db — run something in {{REPO}} first" >&2; exit 1; }
+    command -v bun >/dev/null || { echo "bun not on PATH — https://bun.sh" >&2; exit 1; }
+    cd "{{VIZ}}"
+    [ -d node_modules ] || bun install
+    # The API and the UI are two processes: bun serves /api on 4600, vite serves
+    # the app on 4601 and proxies /api to it. Killed together on Ctrl-C.
+    trap 'kill 0' EXIT INT TERM
+    SSSF_DB="$db" bun run server/index.ts &
+    bunx vite &
+    echo ""
+    echo "  trace:  $db"
+    echo "  ui:     http://localhost:4601"
+    echo ""
+    wait

@@ -300,6 +300,8 @@ export interface HealthResponse {
   ok: boolean;
   db: string;
   journal_mode: string;
+  /** Opened as a static snapshot: the trace has no live writer. */
+  immutable: boolean;
   sessions: number;
 }
 
