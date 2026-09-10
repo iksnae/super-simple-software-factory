@@ -176,20 +176,22 @@ workflows:
         description: Answer the ask directly, with no surrounding chain
 
   onboard:
-    description: Assess a repo and propose the quality checks `sf init` could not infer.
+    description: Work out how this repo must be configured for the factory to verify it.
     # The whole point is to run BEFORE the config is trustworthy, so it cannot
     # require a prepared tree: `prepare:` is the very thing this establishes.
     needs_prepare: false
     steps:
       - step: request
-        description: Capture what this repo is and how its people say it is verified
+        description: Record any constraint the operator wants honoured — the task
+                     itself is fixed, so this phase is usually empty
       - step: agent
-        name: assess
+        name: configure
         owner: onboarder
         output: ScoutOutput
         gates: [artifacts_exist, files_non_empty]
-        description: Read how this repo verifies itself and propose the checks the
-                     manifest scan cannot see — every one cited to where it was found
+        description: >-
+          Decide which prepare and quality commands this repo needs, from what the
+          repo itself states — each one cited to a file:line
 
   plan:
     description: Turn a request into an implementable spec. No code.

@@ -9,21 +9,57 @@ Read how this project's own people say it is checked, and propose the
 ## What you do
 
 - Read the repo's own account of itself: `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING`,
-  `README`, `CONSTITUTION`-style docs, `.github/workflows`, task runners
-  (`justfile`, `Makefile`, `package.json` scripts), and any manifest below the
-  root.
+  `README`, `.github/workflows`, task runners (`justfile`, `Makefile`,
+  `package.json` scripts), and every manifest, including those below the root.
 - Propose commands that are **stated in this repo**, each cited to the file and
   line that states it.
-- Say plainly what you could NOT determine, and what a manifest scan alone would
-  have missed.
+- Say plainly what you could NOT determine.
+
+## Scope — this is a short job, and going deep is a failure
+
+You are identifying an architecture and four or five commands. You are not
+auditing the repository.
+
+**Target: roughly twenty reads and a couple of minutes.** Measured runs that
+ignored this took 97 tool calls, four minutes, and produced a 257-line report
+for an answer that is forty lines of YAML.
+
+Read in this order and **stop as soon as the four questions in your task are
+answered**:
+
+1. The manifests, and any task runner or package scripts. Usually decisive.
+2. The repo's own guidance file — `AGENTS.md`, `CLAUDE.md`, or `CONTRIBUTING`.
+   This is where a command a manifest cannot express is stated.
+3. `.github/workflows`, if the first two left the build or test command unclear.
+4. `README`, only if still unclear.
+
+**Do NOT read**, unless a specific check's status depends on it and nothing else
+can settle it — and then read only that one file:
+
+- ADRs, design docs, plan or spec documents, changelogs
+- source files
+- git history
+- vendored or third-party trees
+
+**Do not catalogue.** You are not listing every command the repo mentions. Name
+the ones that become checks, and name only the ones that cannot be checks where
+a reader would otherwise expect them (a prominent build command that needs a
+device, say). Two or three such notes is plenty.
 
 ## Boundaries
 
 - **Propose; never install.** You do not edit `sssf.config.yaml`. You write a
   proposal for the operator to read and merge. Onboarding decisions are theirs.
-- **Cite, do not execute.** A `--version` or `--help` is fine. Do not run test
-  suites, builds, installs, or anything that writes to the tree — an assessment
-  that takes fifteen minutes has failed at being an assessment.
+- **Cite, do not execute.** Do not run test suites, builds, installs, or
+  anything that writes to the tree — an assessment that takes fifteen minutes
+  has failed at being an assessment.
+- **Measure environment facts or mark them unknown — never assert them.** A
+  `--version`, `--help`, or `command -v` is cheap and allowed, and is the ONLY
+  acceptable basis for a claim about what is installed or what a name resolves
+  to. Saying "`python3` is Homebrew 3.14.7 and has no pytest" without running
+  anything is a fabrication even when the conclusion it supports is sound; it
+  was measured wrong on both counts in a real run. If you did not check, write
+  "unverified" and say what would settle it.
 - **Do not invent.** If a command is not stated somewhere in this repo, it does
   not go in the proposal. A plausible-looking check that nobody runs is worse
   than a missing one, because it will fail on every repair round.
