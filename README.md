@@ -3,9 +3,9 @@
 > One factory checkout. Many repos. No VM, no account, no provisioning key.
 
 Deterministic Python owns the phase graph; coding agents are bounded nodes inside
-it. **Agent proposes, code disposes.** Extracted from
+it. **Agent proposes, code disposes.** This is a fork of
 [disler/super-simple-software-factory](https://github.com/disler/super-simple-software-factory)
-and restructured around three changes:
+— its commit is the root of this history — restructured around three changes:
 
 | Was | Is |
 | --- | --- |
@@ -171,9 +171,14 @@ just obs costs               # spend per agent and per model
 just obs artifacts <adw_id>  # prompts, diffs, and check logs on disk
 ```
 
+```bash
+just obs ui                  # the visualizer: sessions, waterfall, tool-call detail
+just obs ui-install          # once, or after a pull
+```
+
 Everything streams into `.sssf/data/sssf.db` as it happens (WAL, so reads never
-block the writer). The visualizer UI from the original repo was **not** migrated;
-these queries are the read surface for now.
+block the writer), and the UI polls that same file — one data path, no push
+transport. The sqlite recipes are the headless equivalent, not a lesser one.
 
 ---
 
@@ -198,6 +203,25 @@ every tool call, and the session closed clean.
 check going back to the builder), `review_loop`, or any commit phase. Those are the
 original's code with the config changes described here. Run the first one on a
 `git worktree` (`just worktree`), not on a branch you care about.
+
+**The visualizer is verified against a real trace, not a scratch one.** It serves
+this factory's db layout (`<repo>/.sssf/data/sssf.db`), reports four sessions with
+their workflow names and spend, and `vue-tsc` is clean. Opening a FINISHED run
+needed a fix: a readonly connection to a WAL database cannot create the `-shm`
+index, and SQLite surfaces that on the first read rather than at open, so every
+completed trace failed until `openReadable` learned to fall back to
+`immutable=1`. Live runs still take the plain readonly path.
+
+**`sf doctor` checks one credential.** It verifies `OPENROUTER_API_KEY` and that
+every roster model RESOLVES in pi's catalog — not that the provider will
+authenticate. A roster naming a direct provider can pass green and die mid-run on
+a 401, after the planner has already spent. Measured: one `sdlc_quality` run lost
+its builder to exactly this, and the engine reported it as
+`never produced valid BuildOutput JSON` because nothing reads `stopReason` or
+`errorMessage` off the harness stream.
+
+**There is no test suite and no CI.** Every claim in this section was earned by
+running the thing, not by a green pipeline. See `AGENTS.md`.
 
 **`coding_agent: codex` is present but UNVERIFIED.** The Codex CLI adapter
 (`factory/modules/agent_codex.py`) was written against two live probe runs of
