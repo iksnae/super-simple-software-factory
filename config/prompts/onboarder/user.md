@@ -1,14 +1,11 @@
-# Configure This Repo For The Factory
+# Map This Repo For The Factory
 
 ## Variables
 
 ### prompt
 
 Optional context from the operator. It does NOT define your task — your task is
-fixed and stated below. It may be empty, or a single vague word, and that
-changes nothing about what you produce. Use it only if it names something
-specific worth honouring (a platform, a constraint, a check to include or leave
-out).
+fixed and stated below. It is usually empty, and that changes nothing.
 
 {{prompt}}
 
@@ -22,51 +19,36 @@ out).
 
 ## Task
 
-Answer one question: **what must this repo's `sssf.config.yaml` contain for the
-factory to build in it and verify the result?**
+Name this project's shape, and map it to the commands the factory needs.
 
-That is the whole scope. You are not reviewing the code, judging the
-architecture, summarising the product, or suggesting improvements. You are
-determining configuration.
+1. **What shape is it?** Read the manifests and any task runner. Two manifests
+   in different languages means one application in two halves — both get checks.
+2. **What does that shape imply**, corrected by whatever the repo's own guidance
+   file states? A task runner's recipes always win over anything inferred.
+3. **Which commands make the tree runnable** (`prepare:`) and **which judge the
+   code** (`quality:`)?
+4. **Which of the judging commands are fast enough to re-run after every builder
+   repair?** That is the `test` group; the rest is `full`.
 
-Four questions decide it, in order:
+Stop once you can answer those. If the shape and the guidance file do not settle
+something, it is unclear — say so and move on. Chasing it is not this job.
 
-1. **What makes the tree runnable?** Installs, fetches, code generation — the
-   commands that must succeed before anything can be built or tested. These
-   become `prepare:`. If nothing is needed, say so; an empty `prepare:` is a
-   correct answer for a repo with no dependency step.
-2. **What does this project run to decide the code is good?** Tests, type
-   checks, builds, linters. These become `quality: checks:`. Take them from what
-   the repo STATES — its guidance files, CI workflows, task runner, package
-   scripts — not from what is conventional for the stack.
-3. **Which of those is fast and load-bearing enough to re-run after every
-   builder repair?** That set is the `test` group. The rest is `full`.
-4. **What is stated but cannot be a check here, and why?** Anything needing
-   credentials, a network service, a device, a desktop application, or assets
-   absent from the repo. Also anything that currently fails for reasons that
-   predate this work.
+## Output
 
-Read the repo's own account of itself to answer them: `AGENTS.md`, `CLAUDE.md`,
-`CONTRIBUTING`, `README`, `.github/workflows`, `justfile`/`Makefile`,
-`package.json` scripts, and every manifest INCLUDING those below the root.
-
-Then write two files and emit your `Report` JSON. **Both are short. Length here
-is a defect, not thoroughness** — a real run produced 257 lines of notes for an
-answer that is forty lines of YAML.
+Two short files, then your `Report` JSON. **Length is a defect here.**
 
 - `<context_handoff_dir>/proposed-checks.yaml` — the deliverable. A
-  ready-to-paste `prepare:` and `quality:` block obeying the command contract in
-  your system prompt. **One comment line per entry**, carrying the `file:line`
-  that states it. Not a paragraph, not an essay on the trade-off. The exception
-  is a check you are deliberately parking, which gets one extra line saying what
-  would let it in.
+  ready-to-paste `prepare:` and `quality:` block obeying the command contract.
+  **One comment line per entry**: where it came from, as a `file:line` if the
+  repo states it, or "standard for <shape>" if it comes from the shape.
 
-- `<context_handoff_dir>/onboarding-notes.md` — **at most 30 lines**, in three
-  short sections: what this project is architecturally (two or three lines: the
-  languages, the shape, where each half lives); what is stated but cannot be a
-  check, and why (a line each, two or three of them); and what you could not
-  determine (a line each). No tables of every command in the repo, no history,
-  no recommendations beyond the config.
+- `<context_handoff_dir>/onboarding-notes.md` — **at most 20 lines**:
+  - **Shape** — two or three lines. The languages, where each half lives, how it
+    is run.
+  - **Not checkable** — a line each, at most three. What is stated but cannot be
+    a check here, and why.
+  - **Unclear** — a line each. What you could not settle, and what would settle
+    it.
 
 ## Report
 
@@ -75,14 +57,14 @@ Respond with ONLY valid JSON matching `ScoutOutput` — no prose before or after
 ```json
 {
   "status": "success",
-  "summary": "<one sentence: the stack, and what the manifest scan would have missed>",
+  "summary": "<one sentence: the shape, and the commands it maps to>",
   "findings": [
-    { "file": "CLAUDE.md:40", "note": "<the command stated here, and why it matters>" }
+    { "file": "CLAUDE.md:37", "note": "<the command or constraint stated here>" }
   ],
   "artifacts": [
     "<context_handoff_dir>/proposed-checks.yaml",
     "<context_handoff_dir>/onboarding-notes.md"
   ],
-  "notes_for_next_agent": "<what the operator must decide before this config is merged>"
+  "notes_for_next_agent": "<anything the operator must decide before merging>"
 }
 ```
