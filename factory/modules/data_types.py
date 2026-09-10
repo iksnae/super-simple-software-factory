@@ -309,7 +309,12 @@ class PromptEngineering(BaseModel):
 
 class AgentConfig(BaseModel):
     name: str
-    coding_agent: Literal["pi", "claude_code"] = "pi"
+    # "codex" belongs here because `agents.HARNESSES` runs it and
+    # `agents.IMPLEMENTED` claims it. Omitting it made the 370-line Codex
+    # adapter unreachable: pydantic rejected the value before `harness()` could
+    # ever dispatch on it, so the one harness that is implemented could not be
+    # selected while `claude_code` — a stub that raises — could.
+    coding_agent: Literal["pi", "codex", "claude_code"] = "pi"
     model: str = "google/gemini-3.6-flash"
     thinking: str = "medium"        # off | minimal | low | medium | high | xhigh | max
     color: str = ""                 # hex swatch for this agent's lane in the UI
@@ -329,7 +334,12 @@ class AgentConfig(BaseModel):
 
 
 class ConfigDefaults(BaseModel):
-    coding_agent: Literal["pi", "claude_code"] = "pi"
+    # "codex" belongs here because `agents.HARNESSES` runs it and
+    # `agents.IMPLEMENTED` claims it. Omitting it made the 370-line Codex
+    # adapter unreachable: pydantic rejected the value before `harness()` could
+    # ever dispatch on it, so the one harness that is implemented could not be
+    # selected while `claude_code` — a stub that raises — could.
+    coding_agent: Literal["pi", "codex", "claude_code"] = "pi"
     model: str = "google/gemini-3.6-flash"
     thinking: str = "medium"
     color: str = ""
