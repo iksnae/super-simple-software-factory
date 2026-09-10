@@ -12,7 +12,7 @@
  * never runs unless a human clicks the button.
  */
 import { Database } from "bun:sqlite";
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
 import type {
   AgentSession,
@@ -74,6 +74,19 @@ export function resolveDbPath(argv: string[] = Bun.argv): string {
  * and then throws SQLITE_CANTOPEN on first read; the immutable one reads all
  * four sessions.
  */
+/** Cheap identity for "has this file changed" — size and mtime, no read. */
+function fileStamp(path: string): string {
+  try {
+    const st = statSync(path);
+    return `${st.size}:${st.mtimeMs}`;
+  } catch {
+    return "missing";
+  }
+}
+
+/** How often the file is stat'd. A poll cycle is 500ms; this is well under it. */
+const FRESHNESS_MS = 200;
+
 function openReadable(path: string): { db: Database; immutable: boolean } {
   const probe = (db: Database): Database => {
     // Any read forces the WAL index open. `sqlite_master` is guaranteed to
@@ -106,14 +119,18 @@ export class SssfDb {
    * of the db file keeps working when the whole data_dir is relocated.
    */
   readonly sessionsDir: string;
-  readonly journalMode: string;
+  journalMode: string;
   /**
    * True when the trace was opened as a static snapshot because its `-shm` was
    * gone — a run that has finished. Nothing else can be inferred from it: the
    * data is complete, it just will not grow while this process holds it.
    */
-  readonly immutable: boolean;
-  private readonly db: Database;
+  immutable: boolean;
+  private _db: Database;
+  /** size:mtime of the file when `_db` was opened. */
+  private _stamp: string;
+  /** Last freshness check, so a burst of queries stats the file once. */
+  private _checkedAt = 0;
   /** Opened on first archive and kept; null until then. */
   private writer: Database | null = null;
   /** Cache for optionalColumn(), keyed "table.column". Only ever false → true. */
@@ -130,8 +147,9 @@ export class SssfDb {
     this.path = path;
     this.sessionsDir = resolve(dirname(path), "sessions");
     const opened = openReadable(path);
-    this.db = opened.db;
+    this._db = opened.db;
     this.immutable = opened.immutable;
+    this._stamp = fileStamp(path);
 
     // WAL is set by the tracer when it creates the db; a readonly connection
     // cannot change it, so we assert rather than set, and always take the
@@ -182,9 +200,51 @@ export class SssfDb {
     return this.hasColumn(table, column) ? column : `NULL AS ${column}`;
   }
 
+  /**
+   * The read connection, re-validated against the file on disk.
+   *
+   * An `immutable=1` connection promises SQLite the file will never change, and
+   * that promise is evaluated ONLY AT OPEN TIME. The normal workflow breaks it:
+   * open the visualizer on a finished trace (no writer, no `-shm`, so the
+   * immutable fallback is taken), then start a run against the same repo. The
+   * file grows underneath a connection that was told it could not, and every
+   * query then fails `SQLITE_CORRUPT: database disk image is malformed` — while
+   * the database itself is perfectly healthy (`pragma integrity_check` -> ok).
+   * Observed exactly that: the UI froze reporting 1 session while the db held 4.
+   *
+   * So the file is re-stamped on read, at most once per FRESHNESS_MS, and any
+   * change reopens. The reopen goes through `openReadable` again, which tries
+   * the PLAIN readonly path first — and by then a live run has created the
+   * `-shm`, so the connection upgrades itself from snapshot to live.
+   */
+  private get db(): Database {
+    const now = Date.now();
+    if (now - this._checkedAt >= FRESHNESS_MS) {
+      this._checkedAt = now;
+      const stamp = fileStamp(this.path);
+      if (stamp !== this._stamp) {
+        try {
+          this._db.close();
+        } catch {
+          // Already closed or unusable; reopening is what matters.
+        }
+        const opened = openReadable(this.path);
+        this._db = opened.db;
+        this.immutable = opened.immutable;
+        this._stamp = stamp;
+        this.columnCache.clear();   // a migration may have added one
+        const mode = this._db
+          .query<{ journal_mode: string }, []>("PRAGMA journal_mode")
+          .get();
+        this.journalMode = mode?.journal_mode ?? "unknown";
+      }
+    }
+    return this._db;
+  }
+
   close(): void {
     this.writer?.close();
-    this.db.close();
+    this._db.close();
   }
 
   /**
