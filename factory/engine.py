@@ -68,6 +68,24 @@ class WorkflowError(SystemExit):
     """A workflow the operator can fix, reported as a message rather than a trace."""
 
 
+class RunAborted(SystemExit):
+    """The run cannot continue, for a reason the operator can act on.
+
+    A SystemExit subclass for the same reason `WorkflowError` is one: an
+    unprepared tree and a `changes` step with nothing to measure are both
+    conditions with an obvious next action, and a Python traceback buries that
+    action under a stack that points at this file rather than at the repo.
+
+    It must NOT be a plain RuntimeError, and it must still be raised INSIDE the
+    phase block: `runner.phase` catches `BaseException`, so a SystemExit is
+    still recorded as a failed phase, still traced, and still prints the run
+    banner before it leaves. Observed before this existed: a failed `prepare`
+    printed the banner and then a full traceback under it, so the last thing on
+    screen was `raise RuntimeError` in engine.py rather than
+    "[Errno 2] No such file or directory: 'cargo'".
+    """
+
+
 # ── validation (everything checkable, before the first agent spawns) ─────────
 
 def _require(step: StepConfig, field: str, where: str) -> None:
@@ -369,7 +387,7 @@ def _changes_phase(run, state: State, step: StepConfig) -> None:
                lines=f"+{changeset.insertions} -{changeset.deletions}",
                diff=changeset.diff_path)
         if changeset.empty:
-            raise RuntimeError(
+            raise RunAborted(
                 f"nothing changed since {changeset.base.label} "
                 f"({changeset.base.reason}) — there is nothing to document.")
     state.envelopes[step.name] = changes.as_envelope(changeset, step.description)
@@ -457,7 +475,7 @@ def _prepare(run) -> None:
         result = quality.run_prepare(run)
         _record(ph, result)
         if not result.passed:
-            raise RuntimeError(
+            raise RunAborted(
                 "prepare failed, so nothing was planned, built or judged:\n"
                 + "\n".join(result.failures))
 
