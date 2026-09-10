@@ -97,7 +97,7 @@ just obs gates     <adw_id> <repo>   # what every gate checked and found
 just obs envelopes <adw_id> <repo>   # the typed output each agent produced
 just obs costs     <repo>            # spend per agent and per model
 just obs artifacts <adw_id> <repo>   # prompts, diffs, and check logs on disk
-just obs ui        <repo>            # the visualizer on http://localhost:4601
+just obs ui        <repo>            # the visualizer on http://localhost:4600
 ```
 
 Poll on a cursor: keep the highest `rowid` you have seen and query

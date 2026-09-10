@@ -145,8 +145,61 @@ artifacts ADW_ID REPO=invocation_directory():
 #
 # The db lives in the TARGET repo, so the repo argument is what points the UI at
 # a project. Pass REPO when you are not standing in it.
+#
+# `justfile_directory()` in a MODULE resolves to the ROOT justfile's directory,
+# not to just/ where this file lives. It is the repo root already; appending
+# ".." walks above the checkout, to a path that exists nowhere and fails on
+# first use rather than at parse time.
+VIZ := justfile_directory() / ".claude/skills/sssf/apps/visualizer"
 
-VIZ := justfile_directory() / ".." / ".claude/skills/sssf/apps/visualizer"
+# watch runs: builds once, then ONE process on :4600
+ui REPO=invocation_directory():
+    #!/usr/bin/env bash
+    set -euo pipefail
+    db="{{REPO}}/.sssf/data/sssf.db"
+    # Checked here rather than left to the server, because "no runs yet" and
+    # "wrong repo" produce the same empty screen once the UI is up.
+    [ -f "$db" ] || { echo "no trace db at $db — run something in {{REPO}} first" >&2; exit 1; }
+    command -v bun >/dev/null || { echo "bun not on PATH — https://bun.sh" >&2; exit 1; }
+    cd "{{VIZ}}"
+    [ -d node_modules ] || bun install
+    # Built once and served by the API process itself: watching a run needs no
+    # dev server, and one process is one thing to stop. `ui-dev` is the other
+    # mode, for changing the UI itself.
+    [ -d dist ] || bun run build
+    echo ""
+    echo "  trace:  $db"
+    echo "  ui:     http://localhost:4600"
+    echo ""
+    SSSF_DB="$db" exec bun run server/index.ts
+
+# work ON the visualizer: vite with hot reload on :4601, api on :4600
+ui-dev REPO=invocation_directory():
+    #!/usr/bin/env bash
+    set -euo pipefail
+    db="{{REPO}}/.sssf/data/sssf.db"
+    [ -f "$db" ] || { echo "no trace db at $db — run something in {{REPO}} first" >&2; exit 1; }
+    command -v bun >/dev/null || { echo "bun not on PATH — https://bun.sh" >&2; exit 1; }
+    cd "{{VIZ}}"
+    [ -d node_modules ] || bun install
+    # Two processes: bun serves /api on 4600, vite serves the app on 4601 and
+    # proxies /api to it. Killed together on Ctrl-C.
+    trap 'kill 0' EXIT INT TERM
+    SSSF_DB="$db" bun run server/index.ts &
+    bunx vite &
+    echo ""
+    echo "  trace:  $db"
+    echo "  ui:     http://localhost:4601  (hot reload)"
+    echo ""
+    wait
+
+# rebuild the visualizer after changing it
+ui-build:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{VIZ}}"
+    [ -d node_modules ] || bun install
+    bun run build
 
 # install the visualizer's dependencies (once, or after a pull)
 ui-install:
@@ -154,25 +207,3 @@ ui-install:
     set -euo pipefail
     command -v bun >/dev/null || { echo "bun not on PATH — https://bun.sh" >&2; exit 1; }
     cd "{{VIZ}}" && bun install
-
-# open the visualizer on this repo's trace: http://localhost:4601
-ui REPO=invocation_directory():
-    #!/usr/bin/env bash
-    set -euo pipefail
-    db="{{REPO}}/.sssf/data/sssf.db"
-    # Checked here rather than left to the server, because "no runs yet" and
-    # "wrong repo" produce the same blank screen once the UI is up.
-    [ -f "$db" ] || { echo "no trace db at $db — run something in {{REPO}} first" >&2; exit 1; }
-    command -v bun >/dev/null || { echo "bun not on PATH — https://bun.sh" >&2; exit 1; }
-    cd "{{VIZ}}"
-    [ -d node_modules ] || bun install
-    # The API and the UI are two processes: bun serves /api on 4600, vite serves
-    # the app on 4601 and proxies /api to it. Killed together on Ctrl-C.
-    trap 'kill 0' EXIT INT TERM
-    SSSF_DB="$db" bun run server/index.ts &
-    bunx vite &
-    echo ""
-    echo "  trace:  $db"
-    echo "  ui:     http://localhost:4601"
-    echo ""
-    wait

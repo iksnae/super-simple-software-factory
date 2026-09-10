@@ -173,8 +173,13 @@ just obs artifacts <adw_id>  # prompts, diffs, and check logs on disk
 
 ```bash
 just obs ui                  # the visualizer: sessions, waterfall, tool-call detail
-just obs ui-install          # once, or after a pull
+just obs ui-dev              # the same, with hot reload, for changing the UI itself
 ```
+
+`ui` installs and builds on first use, then serves the built app and the API from
+**one** process on `:4600` — watching a run needs no dev server, and one process
+is one thing to stop. `ui-dev` is the two-process form: the API on `:4600`, Vite
+with hot reload on `:4601`.
 
 Everything streams into `.sssf/data/sssf.db` as it happens (WAL, so reads never
 block the writer), and the UI polls that same file — one data path, no push

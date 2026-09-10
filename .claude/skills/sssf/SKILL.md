@@ -135,6 +135,7 @@ Deep specs, when needed: [references/handoff.md](references/handoff.md) ·
 schema-valid and stubbed, and selecting it raises one clear sentence. Models are
 resolved through pi's live catalog (`pi --list-models`) — see `docs/MODELS.md`.
 
-The visualizer ships at `apps/visualizer/`: `just obs ui <target>` (the repo is
-positional, like every other `obs` recipe; from inside the repo, just `just obs ui`). The
+The visualizer ships at `apps/visualizer/`: `just obs ui <target>` serves it on
+`:4600` (the repo is positional, like every other `obs` recipe; from inside the
+repo, just `just obs ui`). The
 `just obs` sqlite recipes are the headless equivalent and read the same db.

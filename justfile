@@ -8,7 +8,7 @@
 # THREE NAMESPACES, and the namespace answers WHAT you are doing:
 #   (root)   run work:        sdlc / simple-sdlc / scout / plan / build / quality / ...
 #   config   inspect config:  list / explain / check / doctor / init / rosters
-#   obs      read the trace:  sessions / phases / events / tail / gates / costs
+#   obs      read the trace:  sessions / phases / events / tail / gates / costs / ui
 
 set positional-arguments
 set dotenv-load
@@ -39,6 +39,7 @@ default:
     @echo ""
     @echo "config:  just config    (list / explain / check / doctor / init / layers)"
     @echo "trace:   just obs       (sessions / phases / tail / gates / costs)"
+    @echo "ui:      just obs ui    (the visualizer, on this repo's trace)"
 
 # ─── run work ────────────────────────────────────────────────────────────────
 # Each recipe is one `sf run <workflow>`. The extra ARGS pass straight through,
