@@ -11,6 +11,62 @@ different documents:
 If the request is "run sdlc on my app", you want the skill. If it is "add a step
 kind", "fix the codex adapter", "why did that run fail" — you are here.
 
+## Where this stands — read this first
+
+Written 2026-09-10. Correct it as you go; a stale status section is worse than
+none.
+
+**The fork.** `iksnae/super-simple-software-factory`, branch `factory-restore`,
+and `main` points at the same commit. `~/Developer/software-factory` is the
+superseded pre-fork checkout — still on disk at `4b82c91`, deliberately not
+deleted. Do not commit to it.
+
+**What has actually run, once each.** These are the only things with evidence
+behind them:
+
+  * `sdlc` end to end on a gitty worktree — 5/5 phases, `verify_loop` executed,
+    $0.0070. The builder's change was correct and stayed in scope.
+  * `onboard` on three repos: gitty (Tauri), fbx2rbx (Python, uninstalled
+    package), outthepark.co (pnpm monorepo + AWS SAM).
+  * `quality` on npm, Go, and SwiftPM repos.
+  * The visualizer against live and finished traces.
+
+**What has NEVER run, anywhere.** `review_loop`, every `commit` step, and
+therefore `simple_sdlc` — the workflow that would exercise both. This has been
+the standing gap all day and it is still the most valuable next thing.
+`~/Projects/gitty-factory-first-run` is a worktree already seeded with a config
+and left clean for exactly this.
+
+**THE ACCOUNT CONSTRAINT — you will hit this in your first five minutes.**
+This OpenRouter account permits only `groq, meta, minimax, mistral, deepseek` as
+upstream providers. Five of the six rosters therefore CANNOT run: `default`
+404s on its planner and documenter, and `frontier`, `open-weights`,
+`codex-open` and `top-speed` all name a blocked upstream somewhere.
+
+**Use `--roster deepestseek`.** It is pure DeepSeek and is the only roster that
+works end to end. `sf doctor --repo <r> --probe` proves it in about a minute and
+is the only check that can — the catalog lists models the account cannot serve.
+`z-ai/glm-5.2` also answers; `glm-5.3-flash` does not (served by deepinfra).
+
+**The three onboarded repos.**
+
+  * `~/Projects/gitty` — config hand-written by me, then validated 4/4 green. The
+    onboarder later proposed a better one (adds `demo_build`); NOT merged.
+  * `~/Projects/fbx2rbx` — config is still the DETECTION default,
+    `argv: [pytest, -q]`, which CANNOT PASS: 15 collection errors, because the
+    package is uninstalled and needs `env PYTHONPATH=src`. The onboarder's
+    proposal is correct and unmerged. Fix this before running anything there.
+  * `~/Projects/outthepark.co` — freshly init'd, `sf check` green, onboarder
+    never run against it (its first attempt died on the config bug now fixed).
+
+**The pattern behind almost every defect found today.** Something was verified
+once and then trusted forever: the catalog said a model existed so it was
+assumed servable (five separate refusals); a root manifest was found so the scan
+stopped (a Tauri app's whole Rust half went missing); a connection had no writer
+at open so it was opened immutable (every finished trace, then every live one).
+Every fix was the same move — stop trusting the cached answer, re-ask the
+source. Apply that lens to anything new.
+
 ## What this is
 
 A fork of [disler/super-simple-software-factory](https://github.com/disler/super-simple-software-factory).
@@ -218,4 +274,23 @@ Current as of the skill-and-UI restoration; correct this list when you close one
   or a shell rc, directly. Env scoping raises the cost of an accident; only an
   OS sandbox is a boundary, and `coding_agent: codex --sandbox read-only` is
   still unverified.
-- **`coding_agent: claude_code` is a stub.** It raises one clear sentence.
+- **`coding_agent: claude_code` is a stub.** It raises one clear sentence. Note
+  the operator reaches Codex THROUGH pi (`openai-codex/…` models with
+  `coding_agent: pi`), not through the direct `agent_codex` adapter — that
+  adapter is selectable but unused by choice.
+- **The nested-manifest note does not understand workspace runners.** On a pnpm
+  monorepo it lists every member and proposes `npm --prefix apps/x test` for
+  each — wrong package manager, and redundant, because the root's `pnpm -r test`
+  already covers them. It should recognise `pnpm-workspace.yaml` or a
+  `workspaces` key plus `-r`/`--filter` scripts and say "members covered by the
+  root's recursive scripts" instead.
+- **`sf run <workflow>` requires a prompt even where it is meaningless.**
+  `quality` ignores it entirely and `onboard` takes an empty string. A workflow
+  that does not need one should be able to say so.
+- **`sf doctor --probe` can only probe models already in a resolved roster.**
+  There is no way to ask "can this account serve model X" without writing a
+  roster that names it first — which is the question you actually have when
+  choosing one.
+- **`.claude/skills copy/` is untracked on purpose.** 34 skills under a
+  Finder-duplicated directory name, disjoint from `.claude/skills/sssf`. The
+  operator should say whether it becomes `.claude/skills/` or goes.

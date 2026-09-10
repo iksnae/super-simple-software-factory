@@ -1,0 +1,45 @@
+{
+  "id": "ux.information-architecture",
+  "skillName": "information-architecture",
+  "title": "Information Architecture",
+  "version": "1.0.0",
+  "tags": ["ux", "ia", "sitemap", "taxonomy", "navigation"],
+  "createdAt": "2026-01-24",
+  "updatedAt": "2026-01-24",
+  "entry": "SKILL.md",
+  "references": [
+    "references/ia-systems.md",
+    "references/content-modeling.md",
+    "references/accessibility.md",
+    "references/examples.md"
+  ],
+  "dependsOn": [],
+  "triggers": [
+    "information architecture",
+    "sitemap design",
+    "navigation structure",
+    "taxonomy design",
+    "content modeling",
+    "design a sitemap",
+    "organize content",
+    "navigation patterns",
+    "card sorting",
+    "tree testing",
+    "findability",
+    "content organization",
+    "headless CMS structure",
+    "faceted navigation",
+    "labeling system"
+  ],
+  "negativeTriggers": [
+    "visual styling",
+    "interaction animations",
+    "CSS layout",
+    "color schemes",
+    "typography choices",
+    "UI component design"
+  ],
+  "author": "Teslasoft",
+  "source": "Teslasoft Vault (70_Skills/Information Architecture.md)",
+  "specReference": "https://agentskills.io/specification"
+}

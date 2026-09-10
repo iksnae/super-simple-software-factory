@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "name": "information-architecture",
+  "owner": "teslasoft-de",
+  "repo": "claude-skills-marketplace",
+  "path": "plugins/ux/skills/information-architecture",
+  "branch": "master",
+  "sha": "8be0912f6ed828e78ffc5a3df0a979b4097cfc1a",
+  "source": "manual"
+}
