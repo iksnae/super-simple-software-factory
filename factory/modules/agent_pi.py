@@ -41,7 +41,7 @@ def _count(value: str) -> int:
 
 
 @lru_cache(maxsize=1)
-def _pi_catalog() -> list[tuple[str, str, int]]:
+def _pi_catalog() -> list[tuple[str, str, int, bool]]:
     """Read pi's merged catalog, including built-in providers and custom models."""
     try:
         result = subprocess.run(
@@ -52,15 +52,20 @@ def _pi_catalog() -> list[tuple[str, str, int]]:
         return []
     if result.returncode != 0:
         return []
+    # Columns: provider, model, context, max-out, thinking, images.
+    # `thinking` is carried because a lane can REQUIRE reasoning, and the
+    # catalog is the only place that says whether a model has it.
     rows = []
     for line in result.stdout.splitlines()[1:]:
         columns = line.split()
         if len(columns) < 3:
             continue
         try:
-            rows.append((columns[0], columns[1], _count(columns[2])))
+            window = _count(columns[2])
         except ValueError:
             continue
+        reasoning = len(columns) > 4 and columns[4].lower() == "yes"
+        rows.append((columns[0], columns[1], window, reasoning))
     return rows
 
 
@@ -71,7 +76,7 @@ def resolve_model(pattern: str) -> tuple[str, str]:
     that same merged view lets SSSF target direct providers such as
     ``openai/gpt-5.6-terra`` without re-registering built-in models locally.
     """
-    catalog = [(provider, model_id) for provider, model_id, _ in _pi_catalog()]
+    catalog = [(provider, model_id) for provider, model_id, _, _ in _pi_catalog()]
     if "/" in pattern:
         provider, model_id = pattern.split("/", 1)
         if (provider, model_id) in catalog:
@@ -111,10 +116,31 @@ def context_window(provider: str, model_id: str) -> int:
     for model in registry.get("providers", {}).get(provider, {}).get("models", []):
         if model.get("id") == model_id:
             return int(model.get("contextWindow") or 0)
-    for listed_provider, listed_model, window in _pi_catalog():
+    for listed_provider, listed_model, window, _ in _pi_catalog():
         if listed_provider == provider and listed_model == model_id:
             return window
     return 0
+
+
+def supports_reasoning(provider: str, model_id: str) -> Optional[bool]:
+    """Whether the catalog says this model reasons. None = the catalog is silent.
+
+    Read from `pi --list-models`' `thinking` column, and from a locally
+    registered model's own `reasoning` field. None is returned rather than False
+    for an unknown model, so a lane requirement reports "cannot tell" instead of
+    failing a model the catalog simply does not describe.
+    """
+    try:
+        registry = json.loads(Path(MODELS_JSON).read_text())
+    except (OSError, json.JSONDecodeError):
+        registry = {}
+    for model in registry.get("providers", {}).get(provider, {}).get("models", []):
+        if model.get("id") == model_id:
+            return bool(model.get("reasoning"))
+    for listed_provider, listed_model, _, reasoning in _pi_catalog():
+        if listed_provider == provider and listed_model == model_id:
+            return reasoning
+    return None
 
 
 def _text_of(container: dict) -> str:

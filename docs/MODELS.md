@@ -142,8 +142,41 @@ All four `cost` fields are required. A partial cost block makes pi drop the whol
 provider, and every run then reports `$0.0000` while genuinely spending.
 
 Local models work the same way — `lmstudio/…`, `ollama/…` — if they are
-registered and running. Whether a local model can hold a plan→build→review loop
-together is an open question, but nothing in the factory stops you testing it.
+registered and running. `ollama` is registered on this host:
+
+```json
+{ "providers": { "ollama": {
+    "baseUrl": "http://localhost:11434/v1",
+    "api": "openai-completions",
+    "apiKey": "ollama",
+    "models": [ { "id": "ornith:latest", "contextWindow": 65536, ... } ] } } }
+```
+
+**Register the context ollama SERVES, not the architecture's ceiling.** `ollama
+show ornith:latest` reports 262144; `ollama ps` reports the loaded model at
+`CONTEXT 65536`. Claiming the ceiling lets pi pack a prompt ollama then
+truncates — silently.
+
+Two rosters staff it, and the split is enforced rather than advisory:
+
+| roster | who is local |
+| --- | --- |
+| `local-assist` | scout + documenter only; hosted models judge and build |
+| `local-only` | every lane, via an explicit `lane: offline` declaration |
+
+**What a 9B local model was measured doing.** `ornith:latest` (qwen35, 9B, Q4,
+tools + thinking) completed the `onboard` workflow end to end against a SwiftPM
+repo: gates green, valid cited YAML, no invented commands, 185,369 tokens,
+**$0.0000**, 308s. It read the repo's justfile, found a `lint: swiftlint`
+recipe, reported it in its findings, and declined to propose a check for a
+binary it had not confirmed — which is the right call. It also ran `swift build`
+and tripped the read-only guard; permissions undid the two `.build/` paths and
+the phase continued.
+
+What is NOT measured: that it can hold plan → build → review together. The lane
+floors in `config/base.yaml` encode that distinction, and `sf doctor` enforces
+it — staffing ornith as the builder fails with
+`has 65,536 context, lane 'build' needs >= 200,000`.
 
 ---
 

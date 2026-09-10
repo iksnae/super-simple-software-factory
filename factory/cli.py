@@ -248,6 +248,13 @@ def cmd_doctor(args) -> int:
     check("every roster model resolves", not unresolved,
           ", ".join(unresolved) if unresolved else f"{len(cfg.agents)} agents")
 
+    # Resolving is not fitting. This is the check that would have refused a 9B
+    # local model in the builder seat, where a truncated context is silent.
+    misfit, checked = _lane_misfits(cfg, unresolved)
+    check("every lane's model fits", not misfit,
+          "; ".join(misfit) if misfit else
+          (f"{checked} lane-assigned agents" if checked else "no lanes declared"))
+
     # Both blocks, because a missing `prepare` binary fails the very first phase
     # of every workflow and is the least obvious thing to go looking for.
     commands = {**cfg.prepare, **cfg.quality.checks}
@@ -259,6 +266,47 @@ def cmd_doctor(args) -> int:
 
     print(f"\n  factory doctor: {'OK' if ok else 'FAILED'}")
     return 0 if ok else 1
+
+
+def _lane_misfits(cfg, unresolved: list[str]) -> tuple[list[str], int]:
+    """Agents whose staffed model does not clear its lane's floor.
+
+    Skips anything that failed to resolve — that is already reported on its own
+    line, and a second complaint about the same model is noise.
+
+    A model the catalog does not describe is NOT a failure: `context_window`
+    returns 0 and `supports_reasoning` returns None for an unknown entry, and
+    refusing to run because the catalog is silent would be worse than the gap
+    this closes.
+    """
+    lane_of: dict[str, str] = {}
+    for lane_name, lane in cfg.lanes.items():
+        for agent_name in lane.agents:
+            lane_of[agent_name] = lane_name
+
+    problems: list[str] = []
+    checked = 0
+    for agent in cfg.agents:
+        if f"{agent.name}:{agent.model}" in unresolved:
+            continue
+        lane_name = agent.lane or lane_of.get(agent.name, "")
+        lane = cfg.lanes.get(lane_name)
+        if lane is None:
+            continue
+        checked += 1
+        provider, model_id = agent_pi.resolve_model(agent.model)
+        window = agent_pi.context_window(provider, model_id)
+        if lane.min_context and window and window < lane.min_context:
+            problems.append(
+                f"{agent.name}: {agent.model} has {window:,} context, "
+                f"lane {lane_name!r} needs >= {lane.min_context:,}")
+        if lane.reasoning:
+            reasons = agent_pi.supports_reasoning(provider, model_id)
+            if reasons is False:
+                problems.append(
+                    f"{agent.name}: {agent.model} does not reason, "
+                    f"lane {lane_name!r} requires it")
+    return problems, checked
 
 
 def cmd_init(args) -> int:

@@ -280,7 +280,7 @@ def describe_chain(workflow: WorkflowConfig, cfg) -> str:
         return out
 
     rendered = render(workflow.steps)
-    if cfg.prepare:
+    if cfg.prepare and workflow.needs_prepare:
         # Prepended, not part of the graph: it runs for every workflow rather
         # than being declared by any one of them.
         rendered.insert(0, f"code(prepare)[{', '.join(cfg.prepare)}]")
@@ -452,10 +452,11 @@ def _run_steps(run, state: State, steps: list[StepConfig], prompt: str) -> None:
             _run_steps(run, state, step.steps, prompt)
 
 
-def _prepare(run) -> None:
+def _prepare(run, workflow: WorkflowConfig) -> None:
     """Make the repo runnable before anything judges it.
 
-    Runs as the first phase of EVERY workflow, ahead of the request, because a
+    Runs as the first phase of every workflow that declares `needs_prepare`
+    (the default), ahead of the request, because a
     tree whose dependencies are missing cannot be planned against, built in, or
     tested — and the factory's own `just worktree` hands over exactly such a
     tree. Six checks were measured red in a fresh worktree and all six green
@@ -466,7 +467,7 @@ def _prepare(run) -> None:
     check is a finding to repair, an unprepared tree was never fit to judge, so
     no agent is spawned and no money is spent.
     """
-    if not run.cfg.prepare:
+    if not workflow.needs_prepare or not run.cfg.prepare:
         return
     with run.phase(PhaseParams(
             name="prepare", kind="code", owner="quality",
@@ -496,7 +497,7 @@ def execute(run, workflow: WorkflowConfig, name: str, prompt: str) -> int:
                                           "description": workflow.description,
                                           **run.paths.describe()}))
 
-    _prepare(run)
+    _prepare(run, workflow)
     _run_steps(run, state, workflow.steps, prompt)
 
     accepted = state.verified if workflow.accept == "verified" else True

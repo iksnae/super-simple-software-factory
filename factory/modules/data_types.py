@@ -335,6 +335,36 @@ class AgentConfig(BaseModel):
     # genuinely needs one more credential names it here and keeps every deny
     # the roster set.
     env: Optional[EnvPolicy] = None
+    # Overrides which lane this agent belongs to. Left empty, the lane is found
+    # by NAME from `lanes:` in config/base.yaml — so the six shipped rosters
+    # needed no edit, and a roster that renames an agent can still say which
+    # kind of work it does.
+    lane: str = ""
+
+
+class LaneSpec(BaseModel):
+    """What a KIND of work needs from whatever model is staffed to it.
+
+    Four rosters, written at different times, all reached for the same
+    vocabulary in their comments — "judgement seats", "mechanical lanes", "cast
+    by lane type". The taxonomy was real and had no name the schema knew, so
+    nothing could act on it: `sf doctor` would report OK for a 9B local model
+    staffed as the builder, because it checks that a model RESOLVES and never
+    that it FITS.
+
+    A lane names the agents that do that kind of work and the floor a model must
+    clear to do it. Both are compared against pi's own catalog, which is the only
+    source that knows a model's context ceiling and whether it reasons.
+
+    `min_context` is a floor, not a promise. A model above it can still be bad
+    at the work; a model below it will truncate, which is a different and
+    detectable kind of wrong.
+    """
+
+    description: str = ""
+    agents: list[str] = Field(default_factory=list)   # which lanes these agents are
+    min_context: int = 0                              # 0 = no floor
+    reasoning: Optional[bool] = None                  # None = do not care
 
 
 class EnvPolicy(BaseModel):
@@ -539,6 +569,16 @@ class WorkflowConfig(BaseModel):
 
     description: str = ""
     requires: list[str] = Field(default_factory=list)   # agent names that must exist
+    # Does this workflow need a RUNNABLE tree? True for anything that plans
+    # against, builds in, or tests the repo — which is why it is the default and
+    # why a failed prepare aborts.
+    #
+    # False only for workflows that READ. A read-only recon does not need
+    # dependencies installed to look at source, and onboarding cannot need them:
+    # `prepare` is the very thing it exists to establish, so gating the
+    # assessment on it is circular. Measured: `sf run scout` on a Tauri repo ran
+    # `npm ci` — wiping and reinstalling node_modules — before reading one file.
+    needs_prepare: bool = True
     pin_baseline: bool = False           # capture HEAD before the first commit
     accept: str = ""                     # "" = phases only, "verified" = also the verdict
     accept_reason: str = ""
@@ -547,6 +587,9 @@ class WorkflowConfig(BaseModel):
 
 class SSSFConfig(BaseModel):
     defaults: ConfigDefaults = Field(default_factory=ConfigDefaults)
+    # Kinds of work, and the floor a model must clear to do them. Declared once
+    # in config/base.yaml and shared by every roster.
+    lanes: dict[str, LaneSpec] = Field(default_factory=dict)
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
     agents: list[AgentConfig] = Field(default_factory=list)
     # Commands that make the repo RUNNABLE, executed as the first phase of every

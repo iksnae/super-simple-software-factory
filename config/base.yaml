@@ -55,6 +55,57 @@ defaults:
       - "AWS_ACCESS_KEY_ID"
     allow: []
 
+# Kinds of work, and the floor a model must clear to do them.
+#
+# Four rosters reached for this vocabulary independently in their comments —
+# "judgement seats", "mechanical lanes", "cast by lane type". It was a real
+# taxonomy with no name the schema knew, so nothing could act on it: `sf doctor`
+# reported OK for any model that RESOLVED, including a 9B local model staffed as
+# the builder.
+#
+# `agents:` maps the lane onto the roster by NAME, which is why the six shipped
+# rosters needed no edit. An agent may override with its own `lane:`.
+#
+# The floors are CALIBRATED, not guessed. Every model the shipped rosters staff
+# has at least 272K of context; the smallest is `openai-codex/gpt-6-astra` at
+# 272,000. 200,000 therefore passes everything that ships today and refuses a
+# 64K local model from the seats where truncation would be silent.
+#
+# A floor is not a promise. A model above it can still be bad at the work; a
+# model below it WILL truncate, which is a different and detectable kind of
+# wrong — and the only kind a config file can check.
+lanes:
+  judgement:
+    description: Plans and verdicts. A wrong answer here costs a build cycle.
+    agents: [planner, reviewer]
+    min_context: 200000
+    reasoning: true
+  build:
+    description: Writes the code, and re-reads it on every repair round.
+    agents: [builder]
+    min_context: 200000
+    reasoning: true
+  mechanical:
+    description: Reads and reports. Small models belong here.
+    agents: [scout, documenter]
+    min_context: 32000
+    # reasoning omitted: not required, not refused.
+
+  offline:
+    # No `agents:` — nothing is in this lane by name. A roster opts INTO it,
+    # per agent, with an explicit `lane: offline`.
+    #
+    # This exists so "I accept a small model in a judgement seat" is a thing an
+    # operator can SAY, in the roster, where a reader will see it — rather than
+    # something they achieve by lowering a floor for everybody. The check still
+    # runs; the roster has simply declared what it is.
+    #
+    # Measured, so the acceptance is informed: a 9B/64K local model completed
+    # the `onboard` workflow correctly ($0, 308s, gates green, no invented
+    # commands). It has not been shown to hold a plan -> build -> review loop.
+    description: Every lane local, at whatever quality that buys. Air-gapped runs.
+    min_context: 32000
+
 observability:
   db: .sssf/data/sssf.db
   poll_ms: 500
@@ -84,6 +135,10 @@ workflows:
 
   scout:
     description: Read-only recon. Just looking for stuff.
+    # Reads source; installs nothing. Measured: this workflow used to run
+    # `npm ci` against a Tauri repo — wiping and reinstalling node_modules —
+    # before looking at a single file.
+    needs_prepare: false
     steps:
       - step: request
         description: Capture the incoming ask
@@ -96,6 +151,7 @@ workflows:
 
   ask:
     description: One agent, one prompt. Override the agent with --owner.
+    needs_prepare: false           # one question, one answer; no tree needed
     steps:
       - step: request
         description: Capture the incoming ask
@@ -104,6 +160,22 @@ workflows:
         owner: builder
         output: GenericOutput
         description: Answer the ask directly, with no surrounding chain
+
+  onboard:
+    description: Assess a repo and propose the quality checks `sf init` could not infer.
+    # The whole point is to run BEFORE the config is trustworthy, so it cannot
+    # require a prepared tree: `prepare:` is the very thing this establishes.
+    needs_prepare: false
+    steps:
+      - step: request
+        description: Capture what this repo is and how its people say it is verified
+      - step: agent
+        name: assess
+        owner: scout
+        output: ScoutOutput
+        gates: [artifacts_exist, files_non_empty]
+        description: Read how this repo verifies itself and propose the checks the
+                     manifest scan cannot see — every one cited to where it was found
 
   plan:
     description: Turn a request into an implementable spec. No code.

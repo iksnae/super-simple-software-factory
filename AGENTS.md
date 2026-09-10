@@ -130,6 +130,26 @@ exactly that reason. So:
 - **Update the verification section when you verify something.** It is the only
   place a reader learns which paths have actually run.
 
+## Lanes
+
+`config/base.yaml` declares `lanes:` — kinds of work, and the floor a model must
+clear to do them. `judgement` (planner, reviewer) and `build` (builder) require
+200,000 context and reasoning; `mechanical` (scout, documenter) requires 32,000.
+Lanes map onto rosters by agent NAME, so a roster needs no edit; an agent may
+override with `lane:`.
+
+`sf doctor` checks the staffed model against its lane's floor. That is the
+difference between "the model resolves" and "the model fits", and it is the
+third instance of one gap: a 401 reported as bad JSON, a `403 MODEL_NOT_IN_PLAN`
+on a model sitting in the catalog, and a 9B model that could be staffed as the
+builder with doctor reporting OK.
+
+The floors are calibrated, not guessed: every model the shipped rosters staff
+has at least 272,000 context, so 200,000 passes them all and refuses a 64K local
+model from the seats where truncation is silent. A floor is not a promise — a
+model above it can still be bad at the work. It is the only part a config file
+can check.
+
 ## Known gaps
 
 Current as of the skill-and-UI restoration; correct this list when you close one.
