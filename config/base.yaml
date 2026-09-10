@@ -91,20 +91,6 @@ lanes:
     min_context: 32000
     # reasoning omitted: not required, not refused.
 
-  offline:
-    # No `agents:` — nothing is in this lane by name. A roster opts INTO it,
-    # per agent, with an explicit `lane: offline`.
-    #
-    # This exists so "I accept a small model in a judgement seat" is a thing an
-    # operator can SAY, in the roster, where a reader will see it — rather than
-    # something they achieve by lowering a floor for everybody. The check still
-    # runs; the roster has simply declared what it is.
-    #
-    # Measured, so the acceptance is informed: a 9B/64K local model completed
-    # the `onboard` workflow correctly ($0, 308s, gates green, no invented
-    # commands). It has not been shown to hold a plan -> build -> review loop.
-    description: Every lane local, at whatever quality that buys. Air-gapped runs.
-    min_context: 32000
 
 observability:
   db: .sssf/data/sssf.db

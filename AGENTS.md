@@ -138,6 +138,10 @@ clear to do them. `judgement` (planner, reviewer) and `build` (builder) require
 Lanes map onto rosters by agent NAME, so a roster needs no edit; an agent may
 override with `lane:`.
 
+No shipped roster staffs a local model — that is parked (see `docs/MODELS.md`).
+The lanes stand on their own: they exist to check any staffing decision, and
+they earned it against hosted models first.
+
 `sf doctor` checks the staffed model against its lane's floor. That is the
 difference between "the model resolves" and "the model fits", and it is the
 third instance of one gap: a 401 reported as bad JSON, a `403 MODEL_NOT_IN_PLAN`
